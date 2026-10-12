@@ -206,6 +206,24 @@ class SettingsActivity : Activity() {
             addView(Ui.switch(ctx, "Mobil / Wi-Fi ayrıntısını göster", prefs.getBoolean(Prefs.ROLL_DETAIL, true)) { put(Prefs.ROLL_DETAIL, it) })
             addView(Ui.switch(ctx, "Yüzen pencerede göster", prefs.getBoolean(Prefs.ROLL_OVERLAY, true)) { put(Prefs.ROLL_OVERLAY, it) })
             addView(Ui.switch(ctx, "Widget'ta göster", prefs.getBoolean(Prefs.ROLL_WIDGET, true)) { put(Prefs.ROLL_WIDGET, it) })
+            val rollResetText = Ui.hint(ctx, "")
+            fun updateRollReset() {
+                val at = prefs.getLong(Prefs.ROLL_RESET_AT, 0L)
+                rollResetText.text = if (at == 0L) "Hiç sıfırlanmadı." else
+                    "Son sıfırlama: " + java.text.SimpleDateFormat("d MMM HH:mm", java.util.Locale("tr")).format(java.util.Date(at)) +
+                        ". Seçtiğin süre dolana kadar sıfırlamadan bu yana olan gösterilir."
+            }
+            updateRollReset()
+            addView(Ui.button(ctx, "Kayan sayacı şimdi sıfırla") {
+                startForegroundService(Intent(ctx, SpeedService::class.java).setAction(SpeedService.ACTION_RESET_ROLL))
+                prefs.edit().putLong(Prefs.ROLL_RESET_AT, System.currentTimeMillis()).apply()
+                updateRollReset()
+                toast("Kayan sayaç sıfırlandı")
+            })
+            addView(rollResetText)
+            addView(Ui.switch(ctx, "Bildirime \"Son X saati sıfırla\" düğmesi ekle", prefs.getBoolean(Prefs.N_BTN_ROLL_RESET, false)) {
+                put(Prefs.N_BTN_ROLL_RESET, it)
+            })
             addView(Ui.hint(ctx, "\"Hızın yanında\" kısa biçimde gösterir (ör. ↓ 4,2 MB/s ↑ 120 KB/s · 2sa 340 MB). Ayrıntı sadece ayrı satırda görünür."))
         })
 

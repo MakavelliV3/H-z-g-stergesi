@@ -48,6 +48,8 @@ object Prefs {
     const val ROLL_DETAIL = "kayan_ayrinti"
     const val ROLL_OVERLAY = "kayan_pencere"
     const val ROLL_WIDGET = "kayan_widget"
+    const val ROLL_RESET_AT = "kayan_sifirlama"
+    const val N_BTN_ROLL_RESET = "bildirim_kayan_sifirla_dugmesi"
     val ROLL_OPTIONS = intArrayOf(1, 2, 3, 6, 12, 24)
     const val N_LINE_PERIOD = "bildirim_donem"
     const val N_LINE_TODAY = "bildirim_bugun"

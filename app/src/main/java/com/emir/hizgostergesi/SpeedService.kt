@@ -137,6 +137,7 @@ class SpeedService : Service() {
         lastNotification?.let { enterForeground(it) }
         when (intent?.action) {
             ACTION_RESET -> resetWindow(System.currentTimeMillis())
+            ACTION_RESET_ROLL -> resetRoll()
             ACTION_TOGGLE_OVERLAY -> {
                 prefs.edit().putBoolean(Prefs.OVERLAY, !prefs.getBoolean(Prefs.OVERLAY, false)).apply()
                 if (!Settings.canDrawOverlays(this)) {
@@ -312,6 +313,16 @@ class SpeedService : Service() {
 
     // ---------- Kayan son X saat ----------
 
+    /** Kayan sayacı sıfırlar: o andan itibaren yeniden birikir. */
+    private fun resetRoll() {
+        hourTotal.fill(0)
+        hourMobile.fill(0)
+        bucketMinute = System.currentTimeMillis() / 60_000L
+        prefs.edit().putLong(Prefs.ROLL_RESET_AT, System.currentTimeMillis()).apply()
+        saveHour()
+        rollValue = 0L
+    }
+
     /** Son n dakikanın toplamı. */
     private fun rollSum(arr: LongArray, minutes: Int): Long {
         var sum = 0L
@@ -485,6 +496,20 @@ class SpeedService : Service() {
                 ).build()
             )
         }
+        if (prefs.getBoolean(Prefs.N_BTN_ROLL_RESET, false)) {
+            val rollReset = PendingIntent.getForegroundService(
+                this, 3,
+                Intent(this, SpeedService::class.java).setAction(ACTION_RESET_ROLL),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            builder.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(this, android.R.drawable.ic_menu_revert),
+                    "Son ${prefs.getInt(Prefs.ROLL_HOURS, 1)} saati sıfırla",
+                    rollReset
+                ).build()
+            )
+        }
         if (prefs.getBoolean(Prefs.N_BTN_RESET, false)) {
             val reset = PendingIntent.getForegroundService(
                 this, 2,
@@ -629,6 +654,7 @@ class SpeedService : Service() {
         const val WARN_ID = 2
         const val ACTION_RESET = "com.emir.hizgostergesi.RESET"
         const val ACTION_TOGGLE_OVERLAY = "com.emir.hizgostergesi.TOGGLE_OVERLAY"
+        const val ACTION_RESET_ROLL = "com.emir.hizgostergesi.RESET_ROLL"
 
         /** Son 60 ölçüm (ana ekrandaki canlı grafik için). */
         private val ring = LongArray(60)
