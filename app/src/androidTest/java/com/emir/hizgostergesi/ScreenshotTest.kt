@@ -36,6 +36,14 @@ class ScreenshotTest {
 
     private fun shot(name: String) {
         pause(900)
+        if (name.startsWith("9_")) {
+            val bmp: Bitmap = inst.uiAutomation.takeScreenshot() ?: return
+            val f = File(dir, "$name.png")
+            FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            shell("mkdir -p /data/local/tmp/shots")
+            shell("cp ${f.absolutePath} /data/local/tmp/shots/")
+            return
+        }
         // Yavaş emülatörde çıkan "uygulama yanıt vermiyor" gibi sistem pencerelerini kapat
         shell("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS")
         pause(300)
@@ -130,9 +138,14 @@ class ScreenshotTest {
         // Bildirim paneli ve durum çubuğu
         ctx.startForegroundService(Intent(ctx, SpeedService::class.java))
         pause(3000)
-        inst.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
-        pause(1500)
+        shell("cmd statusbar expand-notifications")
+        pause(2000)
         shot("9_bildirim_paneli")
+        // Bildirimi genişletip tüm satırları da göster
+        shell("input swipe 540 700 540 1300 300")
+        pause(1200)
+        shot("9_bildirim_paneli_genis")
+        shell("cmd statusbar collapse")
         inst.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
         pause(500)
     }

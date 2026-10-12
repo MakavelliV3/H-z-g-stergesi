@@ -74,11 +74,15 @@ class MainActivity : Activity() {
         nav = buildNav()
         root.addView(content, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         root.addView(nav, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+        // Kaydırınca içerik saat/pil simgelerinin altına girmesin diye yarı saydam şerit
+        val scrim = View(this).apply { setBackgroundColor((Ui.bg(this@MainActivity) and 0x00FFFFFF) or 0xEB000000.toInt()) }
+        root.addView(scrim, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 0, Gravity.TOP))
         root.setOnApplyWindowInsetsListener { _, insets ->
             val (t, b) = Ui.barInsets(insets)
             topInset = t
             bottomInset = b
             nav.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 10) + b)
+            scrim.layoutParams = (scrim.layoutParams as FrameLayout.LayoutParams).apply { height = t }
             screens.forEach { it?.applyInsets(topInset, navSpace()) }
             insets
         }

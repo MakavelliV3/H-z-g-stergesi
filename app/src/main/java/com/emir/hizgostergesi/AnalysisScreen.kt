@@ -241,7 +241,7 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
                 })
         }
         val top = cats.first()
-        categoryBox.addView(Ui.hint(a, "Verinin %${(top.second * 100 / total)}'i \"${top.first}\" kategorisine gitmiş."))
+        categoryBox.addView(Ui.hint(a, "En çok veri \"${top.first}\" kategorisine gitmiş (toplamın %${(top.second * 100 / total)} kadarı)."))
     }
 
     private fun renderHabits(perDay: List<Triple<Long, Long, Long>>) {
@@ -406,7 +406,7 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
         fun line(title: String, s: DayStats) {
             val total = s.mobile + s.wifi
             val pct = if (total > 0) s.screenOff * 100 / total else 0
-            stat(screenOffBox, title, Fmt.bytes(s.screenOff), "Toplam kullanımın %$pct'i ekran kapalıyken")
+            stat(screenOffBox, title, Fmt.bytes(s.screenOff), "Toplam kullanımdaki payı: %$pct")
         }
         line("Bugün", today)
         line("Son 7 gün", week)
@@ -441,6 +441,6 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
         val slow = measured.minByOrNull { avg[it] }!!
         val ratio = if (avg[fast] > 0) avg[slow] * 100 / avg[fast] else 100
         speedText.text = "En hızlı: %02d:00 civarı (${Fmt.speed(avg[fast], bits)})\n".format(fast) +
-            "En yavaş: %02d:00 civarı (${Fmt.speed(avg[slow], bits)}) — en hızlı saatin %%$ratio'i".format(slow)
+            "En yavaş: %02d:00 civarı (${Fmt.speed(avg[slow], bits)}) — hız, en hızlı saate göre %%$ratio seviyesinde".format(slow)
     }
 }

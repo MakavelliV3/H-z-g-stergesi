@@ -177,7 +177,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             quotaBar.visibility = View.VISIBLE
             quotaBar.progress = (ratio * 1000).toInt().coerceIn(0, 1000)
             quotaBar.progressTintList = ColorStateList.valueOf(if (ratio >= 1) 0xFFE53935.toInt() else Ui.ACCENT)
-            tilePeriod.sub.text = "Sınırın %${(ratio * 100).toInt()}'i\n$left sonra sıfırlanır"
+            tilePeriod.sub.text = "Sınır doluluğu: %${(ratio * 100).toInt()}\n$left sonra sıfırlanır"
         } else {
             quotaBar.visibility = View.GONE
             tilePeriod.sub.text = "$hours saatlik${if (mobileOnly) " · mobil" else ""}\n$left sonra sıfırlanır"
