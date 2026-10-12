@@ -414,12 +414,16 @@ object Ui {
                 if (i % 2 == 0) LinearLayout.LayoutParams.MATCH_PARENT else dp(c, 180), dp(c, 14)
             ).apply { bottomMargin = dp(c, 10) })
         }
-        ObjectAnimator.ofFloat(this, View.ALPHA, 0.35f, 1f).apply {
+        // Nabız animasyonu sadece ekrandayken çalışsın; kaldırılınca dursun (yoksa sonsuza dek işlemci yer)
+        val pulse = ObjectAnimator.ofFloat(this, View.ALPHA, 0.35f, 1f).apply {
             duration = 700
             repeatMode = ValueAnimator.REVERSE
             repeatCount = ValueAnimator.INFINITE
-            start()
         }
+        addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) = pulse.start()
+            override fun onViewDetachedFromWindow(v: View) = pulse.cancel()
+        })
     }
 
     /** Yuvarlak arama kutusu. */

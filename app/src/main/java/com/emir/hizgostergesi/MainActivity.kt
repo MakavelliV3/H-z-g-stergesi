@@ -201,7 +201,8 @@ class MainActivity : Activity() {
         }
         current = index
         updateNav()
-        if (resumed || !animate) next.onShow()
+        // İlk açılışta onResume zaten onShow çağırır; iki kez yüklememek için sadece görünürken çağır
+        if (resumed) next.onShow()
     }
 
     private fun updateNav() {

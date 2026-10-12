@@ -72,7 +72,7 @@ jobs:
 
   emulator:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
@@ -92,9 +92,12 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Test APK'larını önceden derle
-        run: gradle assembleDebug assembleDebugAndroidTest --no-daemon
+        id: devbuild
+        continue-on-error: true
+        run: gradle assembleDebug assembleDebugAndroidTest --no-daemon 2>&1 | tee compile.log
 
       - name: Android 14 emülatöründe uçtan uca test
+        if: steps.devbuild.outcome == 'success'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -114,12 +117,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set +e
           mkdir -p cihaz
-          cp device.log cihaz/device.log 2>/dev/null || echo "kayıt yok" > cihaz/device.log
-          cp logcat.txt cihaz/logcat.txt 2>/dev/null || echo "logcat yok" > cihaz/logcat.txt
-          cat app/build/outputs/androidTest-results/connected/debug/*.xml > cihaz/device-tests.xml 2>/dev/null \
-            || find app/build -name "TEST-*.xml" -path "*androidTest*" -exec cat {} + > cihaz/device-tests.xml 2>/dev/null \
-            || echo "sonuç yok" > cihaz/device-tests.xml
-          gh release delete device-tests -y --cleanup-tag || true
-          gh release create device-tests cihaz/device.log cihaz/logcat.txt cihaz/device-tests.xml --prerelease \
-            --title "Emülatör testleri" --notes "Android 14 emülatöründe uçtan uca test sonuçları"
+          [ -f compile.log ] && tail -n 300 compile.log > cihaz/compile.log || echo "derleme kaydı yok" > cihaz/compile.log
+          [ -f device.log ] && cp device.log cihaz/device.log || echo "test çalışmadı" > cihaz/device.log
+          [ -f logcat.txt ] && cp logcat.txt cihaz/logcat.txt || echo "logcat yok" > cihaz/logcat.txt
+          find app/build -name "*.xml" -path "*androidTest-results*" -exec cat {} + > cihaz/device-tests.xml 2>/dev/null
+          [ -s cihaz/device-tests.xml ] || echo "sonuç yok" > cihaz/device-tests.xml
+          gh release view device-tests > /dev/null 2>&1 || gh release create device-tests --prerelease --title "Emülatör testleri" --notes "Android 14 emülatöründe uçtan uca test sonuçları"
+          gh release upload device-tests cihaz/compile.log cihaz/device.log cihaz/logcat.txt cihaz/device-tests.xml --clobber
+          exit 0

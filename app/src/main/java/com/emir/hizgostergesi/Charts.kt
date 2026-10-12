@@ -46,6 +46,7 @@ private fun drawTooltip(canvas: Canvas, view: View, text: String, cx: Float, top
  * Yay şeklinde, logaritmik ölçekli canlı hız göstergesi. Değer değişince ibre yumuşakça kayar.
  */
 class SpeedGauge(c: Context) : View(c) {
+    private val rr = RectF()
     var bits = false
         set(v) {
             field = v
@@ -65,6 +66,8 @@ class SpeedGauge(c: Context) : View(c) {
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG)
     private val sweep = 270f
     private val start = 135f
+    private var gradient: SweepGradient? = null
+    private var gradientFor = -1
 
     init {
         contentDescription = "Anlık hız göstergesi"
@@ -108,7 +111,7 @@ class SpeedGauge(c: Context) : View(c) {
         val size = minOf(width.toFloat(), height / 0.86f) - stroke * 2
         val cx = width / 2f
         val cy = stroke + size / 2
-        val rect = RectF(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2)
+        val rect = rr.apply { set(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2) }
 
         arcPaint.strokeWidth = stroke
         arcPaint.shader = null
@@ -116,12 +119,15 @@ class SpeedGauge(c: Context) : View(c) {
         canvas.drawArc(rect, start, sweep, false, arcPaint)
 
         // İlerleme yayı: beyazdan yarı saydama geçiş
-        val positions = floatArrayOf(0f, 0.75f)
-        arcPaint.shader = SweepGradient(cx, cy, intArrayOf(0x99FFFFFF.toInt(), Color.WHITE), positions).also {
-            val m = android.graphics.Matrix()
-            m.setRotate(start - 2, cx, cy)
-            it.setLocalMatrix(m)
+        if (gradientFor != width) {
+            gradientFor = width
+            gradient = SweepGradient(cx, cy, intArrayOf(0x99FFFFFF.toInt(), Color.WHITE), floatArrayOf(0f, 0.75f)).also {
+                val m = android.graphics.Matrix()
+                m.setRotate(start - 2, cx, cy)
+                it.setLocalMatrix(m)
+            }
         }
+        arcPaint.shader = gradient
         if (shown > 0.001f) canvas.drawArc(rect, start, sweep * shown, false, arcPaint)
         arcPaint.shader = null
 
@@ -212,6 +218,7 @@ class Sparkline(c: Context) : View(c) {
 
 /** Halka (donut) grafik. */
 class DonutChart(c: Context) : View(c) {
+    private val rr = RectF()
     private var slices: List<Pair<Long, Int>> = emptyList()
     private var center = ""
     private var centerSub = ""
@@ -236,7 +243,7 @@ class DonutChart(c: Context) : View(c) {
         val size = minOf(width, height) - stroke
         val left = (width - size) / 2f
         val top = (height - size) / 2f
-        val rect = RectF(left, top, left + size, top + size)
+        val rect = rr.apply { set(left, top, left + size, top + size) }
         paint.strokeWidth = stroke
         paint.color = track
         canvas.drawArc(rect, 0f, 360f, false, paint)
@@ -266,6 +273,7 @@ class DonutChart(c: Context) : View(c) {
  * Üst üste iki dilimli çubuk grafik (ör. mobil + Wi-Fi). Bir çubuğa dokununca değeri balonda gösterir.
  */
 class BarChart(c: Context) : View(c) {
+    private val rr = RectF()
     var data: List<Triple<String, Long, Long>> = emptyList()
         set(v) {
             field = v
@@ -337,15 +345,15 @@ class BarChart(c: Context) : View(c) {
             if (m + w == 0L) {
                 paint.color = textColor
                 paint.alpha = 40
-                canvas.drawRoundRect(RectF(left, bottom - 2 * d, right, bottom), r, r, paint)
+                canvas.drawRoundRect(rr.apply { set(left, bottom - 2 * d, right, bottom) }, r, r, paint)
             } else {
                 // Wi-Fi üstte, mobil altta; üstte yuvarlak köşe
                 paint.color = wifiColor
                 if (dim) paint.alpha = 90
-                canvas.drawRoundRect(RectF(left, bottom - mh - wh, right, bottom), r, r, paint)
+                canvas.drawRoundRect(rr.apply { set(left, bottom - mh - wh, right, bottom) }, r, r, paint)
                 paint.color = mobileColor
                 if (dim) paint.alpha = 90
-                if (mh > 0) canvas.drawRoundRect(RectF(left, bottom - mh, right, bottom), r, r, paint)
+                if (mh > 0) canvas.drawRoundRect(rr.apply { set(left, bottom - mh, right, bottom) }, r, r, paint)
             }
             paint.alpha = 255
             if (data.size <= 12 || i % labelEvery == 0 || i == data.lastIndex || i == selected) {
@@ -370,6 +378,7 @@ class BarChart(c: Context) : View(c) {
 
 /** İnce, yuvarlak uçlu yüzde çubuğu. */
 class PercentBar(c: Context, private val fraction: Float, private val color: Int) : View(c) {
+    private val rr = RectF()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val track = Ui.outline(c)
 
@@ -377,16 +386,17 @@ class PercentBar(c: Context, private val fraction: Float, private val color: Int
         super.onDraw(canvas)
         val r = height / 2f
         paint.color = track
-        canvas.drawRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), r, r, paint)
+        canvas.drawRoundRect(rr.apply { set(0f, 0f, width.toFloat(), height.toFloat()) }, r, r, paint)
         if (fraction <= 0f) return
         paint.color = color
         val w = (width * fraction.coerceIn(0f, 1f)).coerceAtLeast(height.toFloat())
-        canvas.drawRoundRect(RectF(0f, 0f, w, height.toFloat()), r, r, paint)
+        canvas.drawRoundRect(rr.apply { set(0f, 0f, w, height.toFloat()) }, r, r, paint)
     }
 }
 
 /** Mobil / Wi-Fi payını tek çubukta gösterir. */
 class SplitBar(c: Context) : View(c) {
+    private val rr = RectF()
     private var a = 0L
     private var b = 0L
     var colorA = 0xFFFF9800.toInt()
@@ -403,7 +413,7 @@ class SplitBar(c: Context) : View(c) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val r = height / 2f
-        val rect = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        val rect = rr.apply { set(0f, 0f, width.toFloat(), height.toFloat()) }
         paint.color = track
         canvas.drawRoundRect(rect, r, r, paint)
         val total = a + b
@@ -422,6 +432,7 @@ class SplitBar(c: Context) : View(c) {
 
 /** Haftanın günleri × günün saatleri ısı haritası; hücreye dokununca değeri gösterir. */
 class HeatMap(c: Context) : View(c) {
+    private val rr = RectF()
     private var grid: Array<LongArray> = Array(7) { LongArray(24) }
     private var rows: Array<String> = emptyArray()
     private var sel: Pair<Int, Int>? = null
@@ -491,7 +502,7 @@ class HeatMap(c: Context) : View(c) {
                 }
                 val x = left + h * cellW
                 val y = top + r * cellH
-                canvas.drawRoundRect(RectF(x + gap, y + gap, x + cellW - gap, y + cellH - gap), 3 * d, 3 * d, paint)
+                canvas.drawRoundRect(rr.apply { set(x + gap, y + gap, x + cellW - gap, y + cellH - gap) }, 3 * d, 3 * d, paint)
             }
         }
         paint.color = labelColor
@@ -505,7 +516,7 @@ class HeatMap(c: Context) : View(c) {
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 2 * d
             paint.color = Ui.primary(context)
-            canvas.drawRoundRect(RectF(x + gap, y + gap, x + cellW - gap, y + cellH - gap), 3 * d, 3 * d, paint)
+            canvas.drawRoundRect(rr.apply { set(x + gap, y + gap, x + cellW - gap, y + cellH - gap) }, 3 * d, 3 * d, paint)
             paint.style = Paint.Style.FILL
             val name = dayNames.getOrElse(r) { rows.getOrElse(r) { "" } }
             drawTooltip(canvas, this, "$name %02d:00\n${Fmt.bytes(grid[r][h])}".format(h), x + cellW / 2, y, paint, tipBg, tipFg)
