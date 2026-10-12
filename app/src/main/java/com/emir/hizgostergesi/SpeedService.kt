@@ -187,6 +187,8 @@ class SpeedService : Service() {
             .apply()
     }
 
+    private val slow = SlowDetector(125_000L)
+
     private fun update() {
         val nowEl = SystemClock.elapsedRealtime()
         val dt = (nowEl - lastTickAt).coerceAtLeast(250) / 1000.0
@@ -227,6 +229,14 @@ class SpeedService : Service() {
         if (!lastInteractive) today.screenOff += dTotRx + dTotTx
         lastInteractive = interactive
         StatsStore.save(this)
+
+        // Yavaş mobil internet uyarısı (ekran açıkken)
+        if (prefs.getBoolean(Prefs.SLOW_ON, false)) {
+            slow.thresholdBps = prefs.getInt(Prefs.SLOW_KBPS, 1000) * 1000L / 8
+            if (slow.feed(nowEl, TrafficMath.rate(dMobRx, dt), dMobRx + dMobTx, onCellular && interactive)) {
+                SlowNet.notify(this, slow.lastPeak, kind)
+            }
+        }
 
         // Paket durumu: dakikada bir, arka planda
         if (lastPlanAt < 0 || nowEl - lastPlanAt > 60_000L) {
@@ -508,6 +518,7 @@ class SpeedService : Service() {
         val every = prefs.getInt(Prefs.WIDGET_SEC, 15).coerceIn(3, 600) * 1000L
         if (nowEl - lastWidgetAt < every) return
         lastWidgetAt = nowEl
+        try { Widgets.updateAll(this) } catch (e: Exception) { }
         val mgr = AppWidgetManager.getInstance(this)
         val ids = mgr.getAppWidgetIds(ComponentName(this, SpeedWidget::class.java))
         if (ids.isEmpty()) return
@@ -517,7 +528,12 @@ class SpeedService : Service() {
     // ---------- Yüzen pencere ----------
 
     private fun updateOverlay(down: Long, up: Long, bits: Boolean, usage: String, color: Int) {
-        val wanted = prefs.getBoolean(Prefs.OVERLAY, false) && Settings.canDrawOverlays(this)
+        var wanted = prefs.getBoolean(Prefs.OVERLAY, false) && Settings.canDrawOverlays(this)
+        // Oyun modu: pencere sadece seçili uygulamalar öndeyken görünür
+        if (wanted && prefs.getBoolean(Prefs.GAME_ON, false) && NetStats.hasAccess(this)) {
+            val apps = ForegroundApp.parse(prefs.getString(Prefs.GAME_APPS, ""))
+            wanted = ForegroundApp.get(this) in apps
+        }
         if (!wanted) {
             removeOverlay()
             return

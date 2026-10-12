@@ -238,4 +238,54 @@ class SmokeTest {
             pause(1500)
         }
     }
+
+    @Test
+    fun a14_v31Features() {
+        val p = Prefs.get(ctx)
+        // Paket takibi: açık/kapalı, gece paketi, uç değerler
+        p.edit().putBoolean(Prefs.PLAN_ON, true).putInt(Prefs.PLAN_MB, 1).putInt(Prefs.PLAN_DAY, 31)
+            .putBoolean(Prefs.PLAN_NIGHT, true).putInt(Prefs.NIGHT_START, 23).putInt(Prefs.NIGHT_END, 7).commit()
+        val s = PlanState.compute(ctx)
+        assertTrue(s != null && s.end > s.start)
+        PlanState.line(s!!)
+        p.edit().putBoolean(Prefs.PLAN_ON, false).commit()
+        assertTrue(PlanState.compute(ctx) == null)
+        p.edit().putBoolean(Prefs.PLAN_ON, true).putInt(Prefs.PLAN_MB, 20 * 1024).commit()
+        PlanState.compute(ctx)
+        ActivityScenario.launch(MainActivity::class.java).use { pause(2000) }
+
+        // Widget'lar ve grafik
+        Widgets.smallViews(ctx)
+        Widgets.largeViews(ctx)
+        Widgets.updateAll(ctx)
+        Widgets.graph(LongArray(0), 0xFFFFFFFF.toInt())
+        Widgets.graph(LongArray(60) { it * 1000L }, 0xFF00FF00.toInt())
+        SmallWidget().onUpdate(ctx, AppWidgetManager.getInstance(ctx), intArrayOf())
+        LargeWidget().onUpdate(ctx, AppWidgetManager.getInstance(ctx), intArrayOf())
+
+        // Yedek: dışa aktar → geri yükle aynı ayarları verir
+        p.edit().putInt(Prefs.PLAN_DAY, 17).commit()
+        val backup = Backup.export(ctx)
+        p.edit().putInt(Prefs.PLAN_DAY, 3).commit()
+        val (n, _) = Backup.restore(ctx, backup)
+        assertTrue(n > 0)
+        assertTrue(p.getInt(Prefs.PLAN_DAY, 0) == 17)
+        var rejected = false
+        try { Backup.restore(ctx, "{\"app\":\"baska\"}") } catch (e: Exception) { rejected = true }
+        assertTrue(rejected)
+        assertTrue(Backup.csv(StatsStore.all(ctx)).contains("Tarih;"))
+
+        // Oyun modu, yavaş internet, kutucuk sınıfı
+        ForegroundApp.get(ctx)
+        p.edit().putBoolean(Prefs.GAME_ON, true).putString(Prefs.GAME_APPS, "com.android.settings").putBoolean(Prefs.OVERLAY, true).commit()
+        startService()
+        pause(3000)
+        p.edit().putBoolean(Prefs.GAME_ON, false).putBoolean(Prefs.OVERLAY, false).commit()
+        SlowNet.notify(ctx, 40_000, "4.5G")
+        p.edit().putBoolean(Prefs.SLOW_ON, true).commit()
+        pause(2000)
+        p.edit().putBoolean(Prefs.SLOW_ON, false).commit()
+        val tile = ctx.packageManager.getServiceInfo(android.content.ComponentName(ctx, SpeedTile::class.java), 0)
+        assertTrue(tile.permission == "android.permission.BIND_QUICK_SETTINGS_TILE")
+    }
 }

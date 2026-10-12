@@ -248,7 +248,8 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
         habitBox.removeAllViews()
         val withData = perDay.filter { it.second + it.third > 0 }
         if (withData.size < 2) {
-            habitBox.addView(Ui.hint(a, "Henüz yeterli gün yok. \"Kullanım erişimi\" izni verirsen geçmiş günler de hesaba katılır."))
+            habitBox.addView(Ui.hint(a, if (NetStats.hasAccess(a)) "Henüz yeterli gün yok. Birkaç gün kullandıkça burası dolacak."
+                else "Henüz yeterli gün yok. \"Kullanım erişimi\" izni verirsen geçmiş günler de hesaba katılır."))
             return
         }
         val totals = withData.map { it.second + it.third }

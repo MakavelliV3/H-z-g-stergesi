@@ -90,6 +90,10 @@ object Prefs {
     const val PLAN_WARNED = "paket_uyarilan"
     const val N_LINE_PLAN = "bildirim_paket"
     const val PLAN_PROMO_HIDDEN = "paket_tanitim_gizli"
+    const val GAME_ON = "oyun_modu"
+    const val SLOW_ON = "yavas_uyari"
+    const val SLOW_KBPS = "yavas_esik_kbps"
+    const val GAME_APPS = "oyun_uygulamalari"
 
     // Analiz bildirimleri
     const val WEEKLY_ON = "haftalik_ozet"

@@ -39,7 +39,9 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         "Veri sınırı uyarısı (kota)" to SettingsActivity.CAT_ALERTS,
         "Haftalık özet" to SettingsActivity.CAT_ALERTS,
         "Olağandışı kullanım uyarısı" to SettingsActivity.CAT_ALERTS,
+        "Yavaş internet uyarısı" to SettingsActivity.CAT_ALERTS,
         "Yüzen pencere" to SettingsActivity.CAT_OVERLAY,
+        "Oyun modu (seçili uygulamalarda göster)" to SettingsActivity.CAT_OVERLAY,
         "Yüzen pencere yazı boyutu" to SettingsActivity.CAT_OVERLAY,
         "Yüzen pencere koyuluğu" to SettingsActivity.CAT_OVERLAY,
         "Material You renkleri" to SettingsActivity.CAT_LOOK,
@@ -50,6 +52,8 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         "Ekran kapalıyken yavaşlat" to SettingsActivity.CAT_BATTERY,
         "Widget güncelleme sıklığı" to SettingsActivity.CAT_BATTERY,
         "Kurulum sihirbazı ve izinler" to SettingsActivity.CAT_ABOUT,
+        "Yedek al / geri yükle" to SettingsActivity.CAT_ABOUT,
+        "CSV olarak dışa aktar (Excel)" to SettingsActivity.CAT_ABOUT,
         "Sürüm ve hakkında" to SettingsActivity.CAT_ABOUT
     )
 
@@ -106,7 +110,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
             SettingsActivity.CAT_OVERLAY -> if (prefs.getBoolean(Prefs.OVERLAY, false)) "Açık · yazı ${prefs.getInt(Prefs.OVERLAY_SIZE, 12)}" else "Kapalı"
             SettingsActivity.CAT_LOOK -> "${if (prefs.getBoolean(Prefs.DYNAMIC_COLOR, true)) "Material You" else "Klasik mavi"} · ${if (bits) "Mbps" else "MB/s"} · ${prefs.getInt(Prefs.UNIT_BASE, 1000)} tabanı"
             SettingsActivity.CAT_BATTERY -> "${prefs.getInt(Prefs.INTERVAL_SEC, 1)} sn aralık · widget ${prefs.getInt(Prefs.WIDGET_SEC, 15)} sn"
-            else -> "İzinler, sürüm"
+            else -> "İzinler, yedek, CSV, sürüm"
         }
     }
 

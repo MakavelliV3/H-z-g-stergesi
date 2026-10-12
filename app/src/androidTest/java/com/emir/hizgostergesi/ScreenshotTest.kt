@@ -79,6 +79,35 @@ class ScreenshotTest {
         StatsStore.save(ctx, force = true)
     }
 
+    /** Widget'ları ana ekrana eklemeden, görünümlerini çizip kaydeder. */
+    private fun widgetShots() {
+        val d = ctx.resources.displayMetrics.density
+        listOf(
+            Triple("10_widget_kucuk", Widgets.smallViews(ctx), 90 to 90),
+            Triple("10_widget_buyuk", Widgets.largeViews(ctx), 330 to 160),
+            Triple("10_widget_klasik", SpeedWidget.views(ctx, "↓ 4,4 MB/s    ↑ 122 KB/s", "Bugün  Mobil 412 MB • Wi-Fi 1,2 GB", "Son 2 saat: 342 MB", 0xFFFFFFFF.toInt()), 250 to 80)
+        ).forEach { (name, rv, size) ->
+            inst.runOnMainSync {
+                val parent = android.widget.FrameLayout(ctx)
+                val v = rv.apply(ctx, parent)
+                val w = (size.first * d).toInt()
+                val h = (size.second * d).toInt()
+                v.measure(android.view.View.MeasureSpec.makeMeasureSpec(w, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY))
+                v.layout(0, 0, w, h)
+                val bmp = Bitmap.createBitmap(w + 40, h + 40, Bitmap.Config.ARGB_8888)
+                val cv = android.graphics.Canvas(bmp)
+                cv.drawColor(0xFF5B7A99.toInt())   // duvar kâğıdı yerine düz renk
+                cv.translate(20f, 20f)
+                v.draw(cv)
+                val f = File(dir, "$name.png")
+                FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            shell("mkdir -p /data/local/tmp/shots")
+            shell("cp ${File(dir, "$name.png").absolutePath} /data/local/tmp/shots/")
+        }
+    }
+
     /** Servisi durdurup canlı hızı sabit örnek değerlere ayarlar (ana pencere servisi yeniden başlatır). */
     private fun fakeLive() {
         ctx.stopService(Intent(ctx, SpeedService::class.java))
@@ -99,8 +128,17 @@ class ScreenshotTest {
         shell("cmd uimode night no")
         shell("settings put global hide_error_dialogs 1")
         shell("am force-stop com.google.android.apps.nexuslauncher")
-        Prefs.get(ctx).edit().clear().putBoolean(Prefs.ONBOARDED, true).putInt(Prefs.QUOTA_MB, 1024).commit()
+        val resetDay = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_MONTH, -12) }.get(java.util.Calendar.DAY_OF_MONTH)
+        Prefs.get(ctx).edit().clear().putBoolean(Prefs.ONBOARDED, true).putInt(Prefs.QUOTA_MB, 1024)
+            .putBoolean(Prefs.PLAN_ON, true).putInt(Prefs.PLAN_MB, 8 * 1024).putInt(Prefs.PLAN_DAY, resetDay)
+            .putBoolean(Prefs.PLAN_NIGHT, true).commit()
         seed()
+        // Emülatörün kendi kayıtları neredeyse boş; örnek veriden hesaplansın
+        shell("appops set $pkg GET_USAGE_STATS deny")
+        PlanState.compute(ctx)
+        shell("appops set $pkg GET_USAGE_STATS allow")
+        fakeLive()
+        widgetShots()
 
 
         for (night in listOf(false, true)) {

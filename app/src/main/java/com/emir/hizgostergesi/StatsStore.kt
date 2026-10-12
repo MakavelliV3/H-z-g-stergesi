@@ -305,6 +305,46 @@ object StatsStore {
         return m to w
     }
 
+    /** Tüm kayıtlar, dosyadaki biçimle ({"days":…, "months":…}). */
+    @Synchronized
+    fun exportJson(c: Context): JSONObject {
+        val d = JSONObject()
+        all(c).forEach { (k, v) -> d.put(k, v.toJson()) }
+        val m = JSONObject()
+        archivedMonths(c).forEach { (k, v) -> m.put(k, v.toJson()) }
+        return JSONObject().put("days", d).put("months", m)
+    }
+
+    /**
+     * Yedekteki kayıtları ekler. Aynı gün hem telefonda hem yedekte varsa,
+     * daha çok veri kaydı olan sürüm tutulur (iki kez saymamak için toplanmaz). Eklenen/güncellenen gün sayısını döner.
+     */
+    @Synchronized
+    fun importJson(c: Context, o: JSONObject): Int {
+        val days = all(c)
+        val months = archivedMonths(c)
+        var n = 0
+        o.optJSONObject("days")?.let { d ->
+            d.keys().forEach { k ->
+                val inc = DayStats.fromJson(d.getJSONObject(k))
+                val cur = days[k]
+                if (cur == null || inc.mobile + inc.wifi > cur.mobile + cur.wifi) {
+                    days[k] = inc
+                    n++
+                }
+            }
+        }
+        o.optJSONObject("months")?.let { m ->
+            m.keys().forEach { k ->
+                val inc = DayStats.fromJson(m.getJSONObject(k))
+                val cur = months[k]
+                if (cur == null || inc.mobile + inc.wifi > cur.mobile + cur.wifi) months[k] = inc
+            }
+        }
+        save(c, force = true)
+        return n
+    }
+
     @Synchronized
     fun save(c: Context, force: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
@@ -320,11 +360,7 @@ object StatsStore {
         val hourlyCutoff = key(System.currentTimeMillis() - 60L * 86_400_000L)
         map.forEach { (k, v) -> if (k < hourlyCutoff && v.hasHourly) v.dropHourly() }
         months.values.forEach { if (it.hasHourly) it.dropHourly() }
-        val d = JSONObject()
-        map.forEach { (k, v) -> d.put(k, v.toJson()) }
-        val m = JSONObject()
-        months.forEach { (k, v) -> m.put(k, v.toJson()) }
-        val o = JSONObject().put("days", d).put("months", m)
+        val o = exportJson(c)
         val file = AtomicFile(File(c.filesDir, FILE))
         val out = try {
             file.startWrite()

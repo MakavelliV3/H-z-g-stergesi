@@ -21,6 +21,7 @@ import android.widget.Toast
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TreeMap
 
 /** Bir ayar kategorisinin sayfası. Hangi kategori olduğu [EXTRA_CATEGORY] ile gelir. */
 class SettingsActivity : Activity() {
@@ -31,6 +32,9 @@ class SettingsActivity : Activity() {
         const val CAT_NOTIF = "bildirim"
         const val CAT_COUNTERS = "sayac"
         const val CAT_PLAN = "paket"
+        private const val REQ_BACKUP = 41
+        private const val REQ_RESTORE = 42
+        private const val REQ_CSV = 43
         const val CAT_ALERTS = "uyari"
         const val CAT_OVERLAY = "pencere"
         const val CAT_LOOK = "gorunum"
@@ -335,6 +339,10 @@ class SettingsActivity : Activity() {
         root.addView(Ui.card(ctx, "Otomatik bildirimler", "📬").apply {
             addView(Ui.switch(ctx, "Haftalık özet (pazartesi sabahı)", prefs.getBoolean(Prefs.WEEKLY_ON, true)) { put(Prefs.WEEKLY_ON, it) })
             addView(Ui.switch(ctx, "Olağandışı kullanım uyarısı", prefs.getBoolean(Prefs.ANOMALY_ON, true)) { put(Prefs.ANOMALY_ON, it) })
+            addView(Ui.switch(ctx, "Yavaş mobil internet uyarısı", prefs.getBoolean(Prefs.SLOW_ON, false)) { put(Prefs.SLOW_ON, it) })
+            addView(Ui.choiceRow(ctx, listOf("0,5 Mbps" to 500, "1 Mbps" to 1000, "2 Mbps" to 2000, "5 Mbps" to 5000),
+                prefs.getInt(Prefs.SLOW_KBPS, 1000)) { put(Prefs.SLOW_KBPS, it) })
+            addView(Ui.hint(ctx, "Ekran açıkken mobil veri kullanılırken 2 dakika boyunca hız bu değerin altında kalırsa uyarır (en fazla saatte bir). Boşta beklerken uyarmaz."))
             addView(Ui.hint(ctx, "Bir uygulama bugün 100 MB'ı geçip son 7 günlük ortalamasının 3 katından fazla veri çekerse uyarır. " +
                 "Uygulamaya özel günlük sınırları, uygulamanın ayrıntı sayfasından koyabilirsin."))
         })
@@ -364,6 +372,51 @@ class SettingsActivity : Activity() {
             })
             addView(Ui.hint(ctx, "Parmağınla sürükleyip taşı. Çift dokununca gizlenir; bildirimdeki \"Pencereyi göster\" ile geri açılır. Yazı rengi Görünüm sayfasından seçilir."))
         })
+        root.addView(Ui.card(ctx, "Oyun modu", "🎮").apply {
+            addView(Ui.hint(ctx, "Yüzen pencere sadece seçtiğin uygulamalar (oyunlar, video, hız testi…) açıkken görünür, diğer zamanlarda kendiliğinden gizlenir."))
+            addView(Ui.switch(ctx, "Sadece seçili uygulamalarda göster", prefs.getBoolean(Prefs.GAME_ON, false)) {
+                put(Prefs.GAME_ON, it)
+                if (it && !NetStats.hasAccess(ctx)) {
+                    toast("Bunun için \"Kullanım erişimi\" izni gerekiyor")
+                    startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                }
+            })
+            val count = ForegroundApp.parse(prefs.getString(Prefs.GAME_APPS, "")).size
+            gameButton = Ui.button(ctx, if (count > 0) "Uygulamalar ($count seçili)" else "Uygulama seç") { pickGameApps() }
+            addView(gameButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        })
+    }
+
+    private var gameButton: TextView? = null
+
+    private fun pickGameApps() {
+        val ctx = this
+        toast("Uygulamalar yükleniyor…")
+        Thread {
+            val pm = packageManager
+            val launch = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val apps = pm.queryIntentActivities(launch, 0)
+                .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+                .filter { it.first != packageName }
+                .distinctBy { it.first }
+                .sortedBy { it.second.lowercase(Locale("tr", "TR")) }
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                val selected = ForegroundApp.parse(prefs.getString(Prefs.GAME_APPS, "")).toMutableSet()
+                val checked = BooleanArray(apps.size) { apps[it].first in selected }
+                android.app.AlertDialog.Builder(ctx)
+                    .setTitle("Oyun modu uygulamaları")
+                    .setMultiChoiceItems(apps.map { it.second }.toTypedArray(), checked) { _, i, on ->
+                        if (on) selected += apps[i].first else selected -= apps[i].first
+                    }
+                    .setPositiveButton("Kaydet") { _, _ ->
+                        prefs.edit().putString(Prefs.GAME_APPS, selected.joinToString(",")).apply()
+                        gameButton?.text = if (selected.isNotEmpty()) "Uygulamalar (${selected.size} seçili)" else "Uygulama seç"
+                    }
+                    .setNegativeButton("Vazgeç", null)
+                    .show()
+            }
+        }.start()
     }
 
     // ---------- Görünüm ----------
@@ -477,6 +530,21 @@ class SettingsActivity : Activity() {
             addView(Ui.hint(ctx, "İzinleri (bildirim, pil, kullanım erişimi, bağlantı türü, yüzen pencere) adım adım yeniden gözden geçir."))
             addView(Ui.button(ctx, "Kurulum sihirbazını aç", filled = true) { startActivity(Intent(ctx, OnboardingActivity::class.java)) })
         })
+        root.addView(Ui.card(ctx, "Yedek ve dışa aktarma", "💾").apply {
+            addView(Ui.hint(ctx, "Tüm ayarlarını ve günlük istatistiklerini tek bir dosyaya kaydet; telefon değiştirince ya da uygulamayı yeniden kurunca geri yükle. " +
+                "CSV dosyası Excel / Google E-Tablolar'da açılır."))
+            val row = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+            row.addView(Ui.button(ctx, "Yedek al", filled = true) {
+                pick(Intent.ACTION_CREATE_DOCUMENT, "application/json", "hiz-gostergesi-yedek-${StatsStore.key()}.json", REQ_BACKUP)
+            }, btnParams())
+            row.addView(Ui.button(ctx, "Yedekten geri yükle") {
+                pick(Intent.ACTION_OPEN_DOCUMENT, "*/*", null, REQ_RESTORE)
+            }, btnParams())
+            row.addView(Ui.button(ctx, "Günlük kullanımı CSV olarak dışa aktar") {
+                pick(Intent.ACTION_CREATE_DOCUMENT, "text/csv", "hiz-gostergesi-${StatsStore.key()}.csv", REQ_CSV)
+            }, btnParams())
+            addView(row)
+        })
         val version = try {
             packageManager.getPackageInfo(packageName, 0).versionName ?: ""
         } catch (e: Exception) {
@@ -487,6 +555,58 @@ class SettingsActivity : Activity() {
             addView(Ui.hint(ctx, "İnternet izni yoktur: uygulama hiçbir yere bağlanamaz, tüm veriler bu telefonda kalır. " +
                 "Hız ve kullanım, Android'in bayt sayaçlarından ve (izin verirsen) kendi ağ kayıtlarından okunur."))
         })
+    }
+
+    private fun btnParams() = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+    ).apply { topMargin = dp(8) }
+
+    private fun pick(action: String, type: String, name: String?, req: Int) {
+        val i = Intent(action).addCategory(Intent.CATEGORY_OPENABLE).setType(type)
+        if (name != null) i.putExtra(Intent.EXTRA_TITLE, name)
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(i, req)
+        } catch (e: Exception) {
+            toast("Dosya seçici açılamadı")
+        }
+    }
+
+    @Deprecated("Platform Activity API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) return
+        val ctx = applicationContext
+        Thread {
+            val msg = try {
+                when (requestCode) {
+                    REQ_BACKUP -> {
+                        Backup.write(ctx, uri, Backup.export(ctx))
+                        "Yedek kaydedildi"
+                    }
+                    REQ_CSV -> {
+                        StatsStore.save(ctx, force = true)
+                        val text = synchronized(StatsStore) { Backup.csv(TreeMap(StatsStore.all(ctx)), TreeMap(StatsStore.archivedMonths(ctx))) }
+                        Backup.write(ctx, uri, text)
+                        "CSV kaydedildi"
+                    }
+                    REQ_RESTORE -> {
+                        val (n, d) = Backup.restore(ctx, Backup.read(ctx, uri))
+                        Ui.init(ctx)
+                        "Geri yüklendi: $n ayar, $d gün"
+                    }
+                    else -> return@Thread
+                }
+            } catch (e: Exception) {
+                "Olmadı: " + (e.message ?: "dosya okunamadı")
+            }
+            runOnUiThread {
+                Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+                if (requestCode == REQ_RESTORE && !isFinishing) recreate()
+            }
+        }.start()
     }
 
     // ---------- Önizleme ve renk ----------
