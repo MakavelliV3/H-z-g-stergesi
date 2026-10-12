@@ -23,7 +23,7 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: APK derle
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon 2>&1 | tee build.log
 
       - name: APK'yı indirme sayfasına koy
         env:
@@ -34,3 +34,13 @@ jobs:
           gh release create latest HizGostergesi.apk \
             --title "Hız Göstergesi" \
             --notes "Otomatik derlendi. HizGostergesi.apk dosyasını indirip kur."
+          gh release delete build-log -y --cleanup-tag || true
+
+      - name: Hata kaydını yayınla
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete build-log -y --cleanup-tag || true
+          gh release create build-log build.log --prerelease \
+            --title "Derleme hatası" --notes "Son başarısız derlemenin kaydı"

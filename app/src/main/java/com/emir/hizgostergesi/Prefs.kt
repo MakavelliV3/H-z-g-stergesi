@@ -4,18 +4,35 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
 
-/** Ayar anahtarları: ayar ekranı yazar, servis her saniye okur. */
+/** Ayar anahtarları: ayar ekranı yazar, servis her turda okur. */
 object Prefs {
     private const val NAME = "ayarlar"
 
+    // Sayaç
     const val HOURS = "periyot_saat"
+    const val MOBILE_ONLY = "sadece_mobil"
+    const val WINDOW_START = "donem_baslangic"
+    const val USED_MOBILE = "donem_mobil"
+    const val USED_WIFI = "donem_wifi"
+
+    // Veri sınırı
+    const val QUOTA_MB = "sinir_mb"
+    const val QUOTA_WARNED = "sinir_uyarilan_donem"
+
+    // Görünüm
     const val COLOR = "renk"
+    const val UNIT_BITS = "birim_mbps"
+
+    // Yüzen pencere
     const val OVERLAY = "yuzen_pencere"
     const val OVERLAY_X = "pencere_x"
     const val OVERLAY_Y = "pencere_y"
-    const val WINDOW_START = "donem_baslangic"
-    const val USED_RX = "kullanilan_indirme"
-    const val USED_TX = "kullanilan_yukleme"
+    const val OVERLAY_SIZE = "pencere_boyut"
+    const val OVERLAY_ALPHA = "pencere_koyuluk"
+
+    // Pil
+    const val INTERVAL_SEC = "aralik_sn"
+    const val SLOW_WHEN_OFF = "ekran_kapali_yavas"
 
     const val DEFAULT_COLOR = Color.WHITE
     val HOUR_OPTIONS = intArrayOf(1, 2, 3, 6, 12, 24)
@@ -32,16 +49,32 @@ object Fmt {
         else -> "$b B"
     }
 
-    /** Hızı "sayı" + "birim" olarak ayırır (durum çubuğu simgesi için). */
-    fun speedParts(bytesPerSec: Long): Pair<String, String> =
-        if (bytesPerSec >= 1024L * 1024L) {
-            val mb = bytesPerSec / 1048576.0
-            (if (mb >= 10) "%.0f".format(mb) else "%.1f".format(mb)) to "MB/s"
+    fun mb(mb: Int): String = when {
+        mb >= 1024 && mb % 1024 == 0 -> "${mb / 1024} GB"
+        mb >= 1024 -> "%.1f GB".format(mb / 1024.0)
+        else -> "$mb MB"
+    }
+
+    /** Hızı "sayı" + "birim" olarak ayırır. bits=true ise Mbps/Kbps kullanır. */
+    fun speedParts(bytesPerSec: Long, bits: Boolean): Pair<String, String> {
+        if (bits) {
+            val b = bytesPerSec * 8
+            return if (b >= 1_000_000) {
+                val m = b / 1_000_000.0
+                (if (m >= 10) "%.0f".format(m) else "%.1f".format(m)) to "Mbps"
+            } else {
+                (b / 1000).toString() to "Kbps"
+            }
+        }
+        return if (bytesPerSec >= 1024L * 1024L) {
+            val m = bytesPerSec / 1048576.0
+            (if (m >= 10) "%.0f".format(m) else "%.1f".format(m)) to "MB/s"
         } else {
             (bytesPerSec / 1024).toString() to "KB/s"
         }
+    }
 
-    fun speed(b: Long) = speedParts(b).let { "${it.first} ${it.second}" }
+    fun speed(b: Long, bits: Boolean) = speedParts(b, bits).let { "${it.first} ${it.second}" }
 
     fun remaining(ms: Long): String {
         val totalMin = (ms / 60000).coerceAtLeast(0)

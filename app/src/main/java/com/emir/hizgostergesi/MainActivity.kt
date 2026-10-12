@@ -17,16 +17,12 @@ import android.provider.Settings
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
-import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
-import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 
-/** Ayar ekranı: sayaç süresi, sıfırlama, renk ve yüzen pencere. */
+/** Ana ekran: ayarlar ve diğer ekranlara geçiş. */
 class MainActivity : Activity() {
 
     private lateinit var prefs: SharedPreferences
@@ -65,7 +61,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        // Kullanıcı izin ekranından döndüyse anahtarı gerçek duruma göre ayarla
+        // İzin ekranından dönüldüyse anahtarı gerçek duruma göre ayarla
         overlaySwitch.isChecked = prefs.getBoolean(Prefs.OVERLAY, false) && Settings.canDrawOverlays(this)
         handler.post(refresh)
     }
@@ -75,64 +71,77 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private fun dp(v: Int) = Ui.dp(this, v)
+
+    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
+
+    private fun button(label: String, onClick: () -> Unit) = Button(this).apply {
+        text = label
+        isAllCaps = false
+        setOnClickListener { onClick() }
+    }
 
     private fun buildUi(): View {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(28), dp(20), dp(28))
-        }
+        val (scroll, root) = Ui.page(this)
 
-        root.addView(text("Hız Göstergesi", 26f, bold = true))
-
-        // ----- Kullanım sayacı -----
-        root.addView(header("Kullanım sayacı"))
-        usageText = text("", 16f)
-        root.addView(usageText)
-        root.addView(text("Sayaç kaç saatte bir sıfırlansın?", 14f, topDp = 14))
-
-        val group = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
-        val current = prefs.getInt(Prefs.HOURS, 1)
-        Prefs.HOUR_OPTIONS.forEach { h ->
-            group.addView(RadioButton(this).apply {
-                id = View.generateViewId()
-                text = "$h sa"
-                isChecked = h == current
-                setOnClickListener {
-                    prefs.edit().putInt(Prefs.HOURS, h).apply()
-                    refreshUsage()
-                }
-            })
-        }
-        root.addView(HorizontalScrollView(this).apply { addView(group) })
-
-        root.addView(Button(this).apply {
-            text = "Sayacı şimdi sıfırla"
-            setOnClickListener {
-                startForegroundService(
-                    Intent(this@MainActivity, SpeedService::class.java).setAction(SpeedService.ACTION_RESET)
-                )
-                Toast.makeText(this@MainActivity, "Sayaç sıfırlandı", Toast.LENGTH_SHORT).show()
-            }
+        root.addView(Ui.text(this, "Hız Göstergesi", 26f, bold = true))
+        root.addView(button("📊  Günlük istatistik ve geçmiş") {
+            startActivity(Intent(this, HistoryActivity::class.java))
+        })
+        root.addView(button("📱  Uygulama bazlı kullanım") {
+            startActivity(Intent(this, AppsActivity::class.java))
         })
 
-        // ----- Renk -----
-        root.addView(header("Renk"))
-        root.addView(text("Bildirim panelindeki yazıda ve yüzen pencerede kullanılır.", 14f))
+        // ----- Kullanım sayacı -----
+        root.addView(Ui.header(this, "Kullanım sayacı"))
+        usageText = Ui.text(this, "", 16f)
+        root.addView(usageText)
+        root.addView(Ui.text(this, "Neyi saysın?", 14f, topDp = 10))
+        root.addView(Ui.choiceRow(
+            this, listOf("Tümü" to false, "Sadece mobil veri" to true),
+            prefs.getBoolean(Prefs.MOBILE_ONLY, false)
+        ) {
+            prefs.edit().putBoolean(Prefs.MOBILE_ONLY, it).apply()
+            refreshUsage()
+        })
+        root.addView(Ui.text(this, "Kaç saatte bir sıfırlansın?", 14f, topDp = 10))
+        root.addView(Ui.choiceRow(this, Prefs.HOUR_OPTIONS.map { "$it sa" to it }, prefs.getInt(Prefs.HOURS, 1)) {
+            prefs.edit().putInt(Prefs.HOURS, it).apply()
+            refreshUsage()
+        })
+        root.addView(button("Sayacı şimdi sıfırla") {
+            startForegroundService(Intent(this, SpeedService::class.java).setAction(SpeedService.ACTION_RESET))
+            toast("Sayaç sıfırlandı")
+        })
+
+        // ----- Veri sınırı -----
+        root.addView(Ui.header(this, "Veri sınırı uyarısı"))
+        root.addView(Ui.hint(this, "Dönem içinde bu sınır aşılınca bildirim gelir. \"Sadece mobil veri\" seçiliyse yalnızca mobil veri sayılır."))
+        root.addView(Ui.choiceRow(
+            this,
+            listOf("Kapalı" to 0, "250 MB" to 250, "500 MB" to 500, "1 GB" to 1024, "2 GB" to 2048, "5 GB" to 5120, "10 GB" to 10240),
+            prefs.getInt(Prefs.QUOTA_MB, 0)
+        ) {
+            prefs.edit().putInt(Prefs.QUOTA_MB, it).putLong(Prefs.QUOTA_WARNED, 0L).apply()
+        })
+
+        // ----- Görünüm -----
+        root.addView(Ui.header(this, "Görünüm"))
+        root.addView(Ui.text(this, "Hız birimi", 14f))
+        root.addView(Ui.choiceRow(this, listOf("MB/s" to false, "Mbps" to true), prefs.getBoolean(Prefs.UNIT_BITS, false)) {
+            prefs.edit().putBoolean(Prefs.UNIT_BITS, it).apply()
+            updatePreview()
+        })
+        root.addView(Ui.text(this, "Renk (bildirim paneli, yüzen pencere ve widget)", 14f, topDp = 10))
 
         preview = TextView(this).apply {
-            text = "↓ 4,2 MB/s  ↑ 120 KB/s"
-            textSize = 15f
             typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(14), dp(8), dp(14), dp(8))
-            background = GradientDrawable().apply {
-                setColor(0xCC000000.toInt())
-                cornerRadius = dp(12).toFloat()
-            }
+            background = GradientDrawable().apply { cornerRadius = dp(12).toFloat() }
         }
         root.addView(preview, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(12); bottomMargin = dp(8) })
+        ).apply { topMargin = dp(8); bottomMargin = dp(8) })
 
         colors.chunked(5).forEach { row ->
             val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -155,21 +164,18 @@ class MainActivity : Activity() {
             isSingleLine = true
         }
         hexRow.addView(hexInput, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        hexRow.addView(Button(this).apply {
-            text = "Uygula"
-            setOnClickListener {
-                val raw = hexInput.text.toString().trim().let { if (it.startsWith("#")) it else "#$it" }
-                try {
-                    setColor(Color.parseColor(raw))
-                } catch (e: IllegalArgumentException) {
-                    Toast.makeText(this@MainActivity, "Geçersiz renk kodu", Toast.LENGTH_SHORT).show()
-                }
+        hexRow.addView(button("Uygula") {
+            val raw = hexInput.text.toString().trim().let { if (it.startsWith("#")) it else "#$it" }
+            try {
+                setColor(Color.parseColor(raw))
+            } catch (e: IllegalArgumentException) {
+                toast("Geçersiz renk kodu")
             }
         })
         root.addView(hexRow)
 
         // ----- Yüzen pencere -----
-        root.addView(header("Yüzen pencere"))
+        root.addView(Ui.header(this, "Yüzen pencere"))
         overlaySwitch = Switch(this).apply {
             text = "Ekranda yüzen hız penceresi göster"
             textSize = 16f
@@ -181,19 +187,51 @@ class MainActivity : Activity() {
                         "Hız Göstergesi'ne \"Diğer uygulamaların üzerinde göster\" izni ver, sonra geri dön",
                         Toast.LENGTH_LONG
                     ).show()
-                    startActivity(
-                        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-                    )
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                 }
             }
         }
         root.addView(overlaySwitch)
-        root.addView(text("Pencereyi parmağınla sürükleyip istediğin yere taşıyabilirsin.", 14f, topDp = 6))
+        root.addView(Ui.seekRow(this, "Yazı boyutu", 9, 24, prefs.getInt(Prefs.OVERLAY_SIZE, 12), "") {
+            prefs.edit().putInt(Prefs.OVERLAY_SIZE, it).apply()
+            updatePreview()
+        })
+        root.addView(Ui.seekRow(this, "Arka plan koyuluğu", 0, 100, prefs.getInt(Prefs.OVERLAY_ALPHA, 60), "%") {
+            prefs.edit().putInt(Prefs.OVERLAY_ALPHA, it).apply()
+            updatePreview()
+        })
+        root.addView(Ui.hint(this, "Pencereyi parmağınla sürükleyip taşı. Çift dokununca gizlenir; bildirimdeki \"Pencereyi göster\" düğmesiyle geri açılır."))
+
+        // ----- Pil -----
+        root.addView(Ui.header(this, "Pil tasarrufu"))
+        root.addView(Ui.text(this, "Güncelleme aralığı", 14f))
+        root.addView(Ui.choiceRow(this, listOf("1 sn" to 1, "2 sn" to 2, "5 sn" to 5), prefs.getInt(Prefs.INTERVAL_SEC, 1)) {
+            prefs.edit().putInt(Prefs.INTERVAL_SEC, it).apply()
+        })
+        root.addView(Switch(this).apply {
+            text = "Ekran kapalıyken yavaşlat (önerilen)"
+            textSize = 16f
+            isChecked = prefs.getBoolean(Prefs.SLOW_WHEN_OFF, true)
+            setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean(Prefs.SLOW_WHEN_OFF, checked).apply() }
+        })
+        root.addView(Ui.hint(this, "Aralık uzadıkça pil daha az harcanır. Ekran kapalıyken sayaçlar yine doğru tutulur, sadece göstergeler çizilmez."))
+
+        // ----- Widget -----
+        root.addView(Ui.header(this, "Ana ekran widget'ı"))
+        root.addView(Ui.hint(this, "Ana ekranda boş bir yere basılı tut → Widget'lar → Hız Göstergesi'ni ana ekrana sürükle."))
 
         setColor(prefs.getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR), save = false)
+        updatePreview()
         refreshUsage()
+        return scroll
+    }
 
-        return ScrollView(this).apply { addView(root) }
+    private fun updatePreview() {
+        val bits = prefs.getBoolean(Prefs.UNIT_BITS, false)
+        val alpha = prefs.getInt(Prefs.OVERLAY_ALPHA, 60)
+        preview.text = "↓ ${Fmt.speed(4_404_019, bits)}  ↑ ${Fmt.speed(122_880, bits)}"
+        preview.textSize = prefs.getInt(Prefs.OVERLAY_SIZE, 12).toFloat()
+        (preview.background as? GradientDrawable)?.setColor(Color.argb(alpha * 255 / 100, 0, 0, 0))
     }
 
     private fun setColor(color: Int, save: Boolean = true) {
@@ -211,20 +249,15 @@ class MainActivity : Activity() {
 
     private fun refreshUsage() {
         val hours = prefs.getInt(Prefs.HOURS, 1)
+        val mobileOnly = prefs.getBoolean(Prefs.MOBILE_ONLY, false)
         val now = System.currentTimeMillis()
         val start = prefs.getLong(Prefs.WINDOW_START, now)
-        val used = prefs.getLong(Prefs.USED_RX, 0L) + prefs.getLong(Prefs.USED_TX, 0L)
+        val mobile = prefs.getLong(Prefs.USED_MOBILE, 0L)
+        val wifi = prefs.getLong(Prefs.USED_WIFI, 0L)
         val left = start + hours * 3_600_000L - now
-        usageText.text = "Bu $hours saatlik dönemde: ${Fmt.bytes(used)}\n${Fmt.remaining(left)} sonra sıfırlanır"
+        val total = if (mobileOnly) "Mobil: ${Fmt.bytes(mobile)}" else "Toplam: ${Fmt.bytes(mobile + wifi)}"
+        usageText.text = "Bu $hours saatlik dönem — $total\n" +
+            "(Mobil ${Fmt.bytes(mobile)} • Wi-Fi ${Fmt.bytes(wifi)})\n" +
+            "${Fmt.remaining(left)} sonra sıfırlanır"
     }
-
-    private fun header(s: String) = text(s, 19f, bold = true, topDp = 28)
-
-    private fun text(s: String, size: Float, bold: Boolean = false, topDp: Int = 0) =
-        TextView(this).apply {
-            text = s
-            textSize = size
-            if (bold) typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, dp(topDp), 0, dp(4))
-        }
 }
