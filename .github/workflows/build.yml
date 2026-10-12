@@ -111,6 +111,7 @@ jobs:
             gradle connectedDebugAndroidTest --no-daemon --continue > device.log 2>&1 || echo "TESTLER_BASARISIZ" >> device.log
             adb logcat -d -v time > logcat-full.txt || true
             grep -E "AndroidRuntime|FATAL|hizgostergesi|ANR" logcat-full.txt | tail -n 600 > logcat.txt || true
+            adb pull /sdcard/Android/data/com.emir.hizgostergesi/files/shots shots || true
 
       - name: Cihaz testi raporunu yayınla
         if: always()
@@ -126,4 +127,5 @@ jobs:
           [ -s cihaz/device-tests.xml ] || echo "sonuç yok" > cihaz/device-tests.xml
           gh release view device-tests > /dev/null 2>&1 || gh release create device-tests --prerelease --title "Emülatör testleri" --notes "Android 14 emülatöründe uçtan uca test sonuçları"
           gh release upload device-tests cihaz/compile.log cihaz/device.log cihaz/logcat.txt cihaz/device-tests.xml --clobber
+          if [ -d shots ]; then tar czf cihaz/shots.tar.gz -C shots . && gh release upload device-tests cihaz/shots.tar.gz --clobber; fi
           exit 0
