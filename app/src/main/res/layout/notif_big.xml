@@ -6,6 +6,7 @@
 
     <TextView
         android:id="@+id/l1"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification.Title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textSize="16sp"
@@ -13,6 +14,7 @@
 
     <TextView
         android:id="@+id/l2"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
@@ -20,6 +22,7 @@
 
     <TextView
         android:id="@+id/l3"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
@@ -27,6 +30,7 @@
 
     <TextView
         android:id="@+id/l4"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
@@ -34,6 +38,7 @@
 
     <TextView
         android:id="@+id/l5"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"

@@ -393,12 +393,20 @@ class SpeedService : Service() {
         fun styled(s: String): CharSequence =
             if (!mono) s else SpannableString(s).apply { setSpan(TypefaceSpan("monospace"), 0, length, 0) }
 
+        val bgChoice = prefs.getInt(Prefs.N_BG, 0)
+        // Otomatik renk: normal arka planda sistemin (açık/koyu temaya uyan) rengi, renkli arka planda beyaz
+        val textColor: Int? = when {
+            color != Prefs.COLOR_AUTO -> color
+            bgChoice != 0 -> android.graphics.Color.WHITE
+            else -> null
+        }
+
         fun fill(v: RemoteViews, ids: IntArray) {
             ids.forEachIndexed { i, id ->
                 if (i < lines.size) {
                     v.setViewVisibility(id, View.VISIBLE)
                     v.setTextViewText(id, styled(lines[i]))
-                    v.setTextColor(id, color)
+                    if (textColor != null) v.setTextColor(id, textColor)
                     v.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, if (i == 0) firstSp else otherSp)
                 } else {
                     v.setViewVisibility(id, View.GONE)
@@ -494,7 +502,7 @@ class SpeedService : Service() {
         val mgr = AppWidgetManager.getInstance(this)
         val ids = mgr.getAppWidgetIds(ComponentName(this, SpeedWidget::class.java))
         if (ids.isEmpty()) return
-        mgr.updateAppWidget(ids, SpeedWidget.views(this, speed, today, period, color))
+        mgr.updateAppWidget(ids, SpeedWidget.views(this, speed, today, period, Prefs.onDark(color)))
     }
 
     // ---------- Yüzen pencere ----------
@@ -515,7 +523,7 @@ class SpeedService : Service() {
             view.textSize = size.toFloat()
             (view.background as? GradientDrawable)?.setColor(Color.argb(alpha * 255 / 100, 0, 0, 0))
         }
-        view.setTextColor(color)
+        view.setTextColor(Prefs.onDark(color))
         view.text = "↓ ${Fmt.speed(down, bits)}  ↑ ${Fmt.speed(up, bits)}\n$usage"
     }
 

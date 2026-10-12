@@ -12,7 +12,7 @@ class SpeedWidget : AppWidgetProvider() {
 
     override fun onUpdate(c: Context, mgr: AppWidgetManager, ids: IntArray) {
         val today = StatsStore.today(c)
-        val color = Prefs.get(c).getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR)
+        val color = Prefs.onDark(Prefs.get(c).getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR))
         mgr.updateAppWidget(
             ids,
             views(

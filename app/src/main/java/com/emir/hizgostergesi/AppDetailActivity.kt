@@ -151,6 +151,7 @@ class AppDetailActivity : Activity() {
         chart.data = starts.indices.map { i ->
             Triple(dayLabel.format(java.util.Date(starts[i])), daily[i][0], daily[i][1])
         }
+        if (daily.all { it[0] + it[1] == 0L }) chart.topLabel = { "Son 30 günde veri kullanımı yok" }
         val tipFmt = SimpleDateFormat("d MMMM EEEE", Locale("tr"))
         chart.tooltip = { i ->
             "${tipFmt.format(java.util.Date(starts[i]))}\n${Fmt.bytes(daily[i][0] + daily[i][1])}  (mobil ${Fmt.bytes(daily[i][0])})"

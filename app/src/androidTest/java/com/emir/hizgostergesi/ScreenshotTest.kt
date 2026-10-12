@@ -36,6 +36,9 @@ class ScreenshotTest {
 
     private fun shot(name: String) {
         pause(900)
+        // Yavaş emülatörde çıkan "uygulama yanıt vermiyor" gibi sistem pencerelerini kapat
+        shell("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS")
+        pause(300)
         val bmp: Bitmap = inst.uiAutomation.takeScreenshot() ?: return
         val f = File(dir, "$name.png")
         FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -86,6 +89,8 @@ class ScreenshotTest {
         shell("appops set $pkg GET_USAGE_STATS allow")
         shell("appops set $pkg SYSTEM_ALERT_WINDOW allow")
         shell("cmd uimode night no")
+        shell("settings put global hide_error_dialogs 1")
+        shell("am force-stop com.google.android.apps.nexuslauncher")
         Prefs.get(ctx).edit().clear().putBoolean(Prefs.ONBOARDED, true).putInt(Prefs.QUOTA_MB, 1024).commit()
         seed()
 

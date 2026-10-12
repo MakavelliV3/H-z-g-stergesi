@@ -308,8 +308,22 @@ class SettingsActivity : Activity() {
             addView(Ui.hint(ctx, "Android'in kendi veri kullanımı ekranı ve operatörler 1000 tabanını kullanır (1 GB = 1000 MB). Rakamların onlarla tutması için 1000 önerilir."))
         })
         root.addView(Ui.card(ctx, "Yazı rengi", "🖍").apply {
-            addView(Ui.hint(ctx, "Bildirim paneli, yüzen pencere ve widget'taki yazılarda kullanılır."))
+            addView(Ui.hint(ctx, "Bildirim paneli, yüzen pencere ve widget'taki yazılarda kullanılır. " +
+                "\"Otomatik\": bildirimde telefonun açık/koyu temasına uyan renk, koyu zeminlerde beyaz."))
             addPreview(this)
+            val auto = TextView(ctx).apply {
+                text = "Otomatik"
+                textSize = 14f
+                typeface = Ui.MEDIUM
+                gravity = Gravity.CENTER
+                setTextColor(Ui.primary(ctx))
+                setPadding(dp(16), 0, dp(16), 0)
+                contentDescription = "Otomatik renk"
+                isClickable = true
+                setOnClickListener { setColor(Prefs.COLOR_AUTO) }
+            }
+            addView(auto, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(44)).apply { setMargins(dp(4), dp(4), 0, dp(4)) })
+            swatches += auto to Prefs.COLOR_AUTO
             colors.chunked(5).forEach { row ->
                 val line = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
                 row.forEach { (name, col) ->
@@ -411,17 +425,19 @@ class SettingsActivity : Activity() {
             val alpha = prefs.getInt(Prefs.OVERLAY_ALPHA, 60)
             p.text = "↓ ${Fmt.speed(4_404_019, bits)}  ↑ ${Fmt.speed(122_880, bits)}  ·  5G"
             p.textSize = prefs.getInt(Prefs.OVERLAY_SIZE, 12).toFloat()
-            p.setTextColor(prefs.getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR))
+            p.setTextColor(Prefs.onDark(prefs.getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR)))
             (p.background as? GradientDrawable)?.setColor(Color.argb(alpha * 255 / 100, 0, 0, 0))
         }
     }
 
     private fun setColor(color: Int, save: Boolean = true) {
         if (save) prefs.edit().putInt(Prefs.COLOR, color).apply()
-        preview?.setTextColor(color)
+        preview?.setTextColor(Prefs.onDark(color))
         swatches.forEach { (view, col) ->
             val selected = col == color
-            view.background = GradientDrawable().apply {
+            view.background = if (col == Prefs.COLOR_AUTO) {
+                Ui.rounded(0, dp(50).toFloat(), if (selected) dp(3) else dp(1), if (selected) Ui.ACCENT else Ui.outline(this@SettingsActivity))
+            } else GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(col)
                 setStroke(if (selected) dp(4) else dp(1), if (selected) Ui.ACCENT else Ui.outline(this@SettingsActivity))

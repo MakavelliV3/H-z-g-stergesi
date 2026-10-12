@@ -88,7 +88,12 @@ object Prefs {
     const val INTERVAL_SEC = "aralik_sn"
     const val SLOW_WHEN_OFF = "ekran_kapali_yavas"
 
-    const val DEFAULT_COLOR = Color.WHITE
+    /** 0 = otomatik: bildirimde sistemin yazı rengi, koyu zeminli pencere ve widget'ta beyaz. */
+    const val COLOR_AUTO = 0
+    const val DEFAULT_COLOR = COLOR_AUTO
+
+    /** Koyu zemin üstünde kullanılacak yazı rengi (otomatikse beyaz). */
+    fun onDark(color: Int) = if (color == COLOR_AUTO) Color.WHITE else color
     val HOUR_OPTIONS = intArrayOf(1, 2, 3, 6, 12, 24)
 
     fun get(c: Context): SharedPreferences = c.getSharedPreferences(NAME, Context.MODE_PRIVATE)

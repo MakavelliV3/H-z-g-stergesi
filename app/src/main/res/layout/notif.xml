@@ -6,6 +6,7 @@
 
     <TextView
         android:id="@+id/l1"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification.Title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:maxLines="1"
@@ -15,6 +16,7 @@
 
     <TextView
         android:id="@+id/l2"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
