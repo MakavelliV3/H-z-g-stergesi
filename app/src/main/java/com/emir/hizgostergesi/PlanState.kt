@@ -50,7 +50,9 @@ object PlanState {
         val start = PlanMath.cycleStart(now, day)
         val end = PlanMath.cycleEnd(start, day)
         val system = NetStats.hasAccess(c)
-        val mobile = if (system) NetStats.deviceTotal(c, start, now).first else StatsStore.sumRange(c, start, now).first
+        // Android kayıtları genelde daha eksiksizdir; yine de hangisi büyükse o alınır (eksik kayda karşı)
+        val own = StatsStore.sumRange(c, start, now).first
+        val mobile = if (system) maxOf(NetStats.deviceTotal(c, start, now).first, own) else own
         val night = if (p.getBoolean(Prefs.PLAN_NIGHT, false)) {
             StatsStore.nightMobile(c, start, now, p.getInt(Prefs.NIGHT_START, 0), p.getInt(Prefs.NIGHT_END, 8))
         } else 0L
