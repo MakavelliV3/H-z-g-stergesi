@@ -16,7 +16,14 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Build
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
+import android.widget.EditText
+import android.widget.ImageView
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -95,6 +102,44 @@ object Ui {
      * Kenardan kenara, kaydırılabilir sayfa. İçerik sistem çubuklarının altına taşmasın diye
      * onların boyu kadar boşluk bırakılır.
      */
+    /** Pencereyi kenardan kenara, doğru durum çubuğu renkleriyle hazırlar. */
+    fun setupWindow(a: Activity) {
+        a.actionBar?.hide()
+        a.window.decorView.setBackgroundColor(bg(a))
+        if (Build.VERSION.SDK_INT >= 30) {
+            a.window.setDecorFitsSystemWindows(false)
+            val light = !night(a)
+            a.window.insetsController?.setSystemBarsAppearance(
+                if (light) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS else 0,
+                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            )
+        }
+    }
+
+    /** Sistem çubuklarının (üst, alt) yüksekliği. */
+    fun barInsets(insets: WindowInsets): Pair<Int, Int> =
+        if (Build.VERSION.SDK_INT >= 30) {
+            val b = insets.getInsets(WindowInsets.Type.systemBars())
+            b.top to b.bottom
+        } else {
+            insets.systemWindowInsetTop to insets.systemWindowInsetBottom
+        }
+
+    /** Sekme içinde kullanılan kaydırılabilir sayfa (pencere ayarına dokunmaz). */
+    fun scrollPage(c: Context): Pair<ScrollView, LinearLayout> {
+        val p = dp(c, 16)
+        val root = LinearLayout(c).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(p, p / 2, p, p)
+        }
+        val scroll = ScrollView(c).apply {
+            isVerticalScrollBarEnabled = false
+            clipToPadding = false
+            addView(root)
+        }
+        return scroll to root
+    }
+
     fun page(a: Activity): Pair<ScrollView, LinearLayout> {
         a.actionBar?.hide()
         val p = dp(a, 16)
@@ -140,7 +185,7 @@ object Ui {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, 0, 0, dp(a, 12))
         }
-        if (back) row.addView(circleButton(a, "←") { a.finish() })
+        if (back) row.addView(iconButton(a, R.drawable.ic_back, "Geri") { a.finish() })
         row.addView(TextView(a).apply {
             text = title
             textSize = 24f
@@ -150,6 +195,18 @@ object Ui {
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         if (action != null) row.addView(circleButton(a, action.first, action.second))
         return row
+    }
+
+    fun iconButton(c: Context, icon: Int, description: String, onClick: () -> Unit) = ImageView(c).apply {
+        setImageResource(icon)
+        imageTintList = ColorStateList.valueOf(primary(c))
+        contentDescription = description
+        val p = dp(c, 10)
+        setPadding(p, p, p, p)
+        background = ripple(rounded(surface(c), dp(c, 24).toFloat()))
+        isClickable = true
+        setOnClickListener { onClick() }
+        layoutParams = LinearLayout.LayoutParams(dp(c, 44), dp(c, 44))
     }
 
     fun circleButton(c: Context, label: String, onClick: () -> Unit) = TextView(c).apply {
@@ -210,7 +267,8 @@ object Ui {
         setPadding(0, dp(c, topDp), 0, dp(c, 4))
     }
 
-    fun label(c: Context, s: String) = text(c, s.uppercase(), 12f, topDp = 12, color = secondary(c)).apply {
+    // Türkçe büyük harf: "i" → "İ" (Locale.ROOT "I" yapardı)
+    fun label(c: Context, s: String) = text(c, s.uppercase(java.util.Locale("tr", "TR")), 12f, topDp = 12, color = secondary(c)).apply {
         typeface = MEDIUM
         letterSpacing = 0.06f
     }
@@ -255,7 +313,10 @@ object Ui {
                 }
                 setTextColor(ColorStateList(checkedStates, intArrayOf(Color.WHITE, primary(c))))
                 isChecked = value == current
-                setOnClickListener { onPick(value) }
+                setOnClickListener {
+                    it.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    onPick(value)
+                }
             }
             group.addView(chip, RadioGroup.LayoutParams(
                 RadioGroup.LayoutParams.WRAP_CONTENT, RadioGroup.LayoutParams.WRAP_CONTENT
@@ -276,7 +337,10 @@ object Ui {
         thumbTintList = ColorStateList(checkedStates, intArrayOf(ACCENT, 0xFFBDBDBD.toInt()))
         trackTintList = ColorStateList(checkedStates, intArrayOf(accentSoft(0x80), 0x40888888))
         setPadding(0, dp(c, 9), 0, dp(c, 9))
-        setOnCheckedChangeListener { _, v -> onChange(v) }
+        setOnCheckedChangeListener { b, v ->
+            b.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            onChange(v)
+        }
     }
 
     /** Başlığında değeri gösteren kaydırma çubuğu. */
@@ -307,8 +371,138 @@ object Ui {
         return box
     }
 
+    /** Sekme başlığı: büyük başlık ve isteğe bağlı alt yazı. */
+    fun screenTitle(c: Context, title: String, subtitle: String? = null): View = LinearLayout(c).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(c, 4), dp(c, 8), dp(c, 4), dp(c, 14))
+        addView(TextView(c).apply {
+            text = title
+            textSize = 30f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(primary(c))
+        })
+        if (subtitle != null) addView(hint(c, subtitle).apply { textSize = 14f })
+    }
+
+    /** Boş durum: simge, başlık, açıklama ve isteğe bağlı düğme. */
+    fun emptyState(c: Context, icon: String, title: String, text: String, action: Pair<String, () -> Unit>? = null): View =
+        LinearLayout(c).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(c, 8), dp(c, 18), dp(c, 8), dp(c, 12))
+            addView(TextView(c).apply {
+                this.text = icon
+                textSize = 30f
+                gravity = Gravity.CENTER
+                background = rounded(accentSoft(), dp(c, 32).toFloat())
+            }, LinearLayout.LayoutParams(dp(c, 64), dp(c, 64)).apply { bottomMargin = dp(c, 12) })
+            addView(text(c, title, 16f).apply {
+                typeface = MEDIUM
+                gravity = Gravity.CENTER
+            })
+            addView(hint(c, text).apply { gravity = Gravity.CENTER })
+            if (action != null) addView(button(c, action.first, filled = true, onClick = action.second))
+        }
+
+    /** Yüklenirken nabız gibi atan gri yer tutucular. */
+    fun skeleton(c: Context, rows: Int = 3): View = LinearLayout(c).apply {
+        orientation = LinearLayout.VERTICAL
+        repeat(rows) { i ->
+            addView(View(c).apply {
+                background = rounded(outline(c), dp(c, 8).toFloat())
+            }, LinearLayout.LayoutParams(
+                if (i % 2 == 0) LinearLayout.LayoutParams.MATCH_PARENT else dp(c, 180), dp(c, 14)
+            ).apply { bottomMargin = dp(c, 10) })
+        }
+        ObjectAnimator.ofFloat(this, View.ALPHA, 0.35f, 1f).apply {
+            duration = 700
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            start()
+        }
+    }
+
+    /** Yuvarlak arama kutusu. */
+    fun searchField(c: Context, hintText: String, onChange: (String) -> Unit): View {
+        val row = LinearLayout(c).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(c, 14), 0, dp(c, 14), 0)
+            background = rounded(surface(c), dp(c, 50).toFloat())
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(c, 50)).apply {
+                bottomMargin = dp(c, 12)
+            }
+        }
+        row.addView(ImageView(c).apply {
+            setImageResource(R.drawable.ic_search)
+            imageTintList = ColorStateList.valueOf(secondary(c))
+        }, LinearLayout.LayoutParams(dp(c, 20), dp(c, 20)).apply { rightMargin = dp(c, 10) })
+        row.addView(EditText(c).apply {
+            hint = hintText
+            isSingleLine = true
+            textSize = 15f
+            background = null
+            setTextColor(primary(c))
+            setHintTextColor(secondary(c))
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: Editable?) = onChange(s?.toString() ?: "")
+            })
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        return row
+    }
+
+    /** Ayar menüsü satırı: simge balonu, başlık, özet ve ok. */
+    fun navRow(c: Context, icon: String, title: String, summary: String, onClick: () -> Unit): View =
+        LinearLayout(c).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            val p = dp(c, 12)
+            setPadding(p, p, p, p)
+            minimumHeight = dp(c, 64)
+            background = ripple(rounded(0, dp(c, 18).toFloat()))
+            isClickable = true
+            setOnClickListener { onClick() }
+            addView(TextView(c).apply {
+                text = icon
+                textSize = 18f
+                gravity = Gravity.CENTER
+                background = rounded(accentSoft(), dp(c, 20).toFloat())
+            }, LinearLayout.LayoutParams(dp(c, 40), dp(c, 40)).apply { rightMargin = dp(c, 14) })
+            val texts = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
+            texts.addView(text(c, title, 16f).apply {
+                typeface = MEDIUM
+                setPadding(0, 0, 0, dp(c, 1))
+            })
+            if (summary.isNotEmpty()) texts.addView(hint(c, summary).apply { maxLines = 2 })
+            addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(ImageView(c).apply {
+                setImageResource(R.drawable.ic_chevron)
+                imageTintList = ColorStateList.valueOf(secondary(c))
+            }, LinearLayout.LayoutParams(dp(c, 18), dp(c, 18)))
+        }
+
+    /** Kartın içinde ince ayırıcı çizgi. */
+    fun divider(c: Context): View = View(c).apply {
+        setBackgroundColor(outline(c))
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).apply {
+            topMargin = dp(c, 2)
+            bottomMargin = dp(c, 2)
+        }
+    }
+
+    /** Görünürken yumuşakça belirme. */
+    fun fadeIn(v: View, delay: Long = 0) {
+        v.alpha = 0f
+        v.translationY = dp(v.context, 12).toFloat()
+        v.animate().alpha(1f).translationY(0f).setStartDelay(delay).setDuration(320)
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+    }
+
     /** Başlık, büyük değer ve alt bilgi içeren küçük özet kutusu. */
     class StatTile(c: Context, title: String) : LinearLayout(c) {
+        val title: TextView
         val value: TextView
         val sub: TextView
 
@@ -317,7 +511,10 @@ object Ui {
             val pad = Ui.dp(c, 14)
             setPadding(pad, pad, pad, pad)
             background = Ui.rounded(Ui.surface(c), Ui.dp(c, 22).toFloat())
-            addView(Ui.label(c, title).apply { setPadding(0, 0, 0, Ui.dp(c, 4)) })
+            this.title = Ui.label(c, title).apply { setPadding(0, 0, 0, Ui.dp(c, 4)) }
+            addView(this.title)
+            isClickable = true
+            background = Ui.ripple(Ui.rounded(Ui.surface(c), Ui.dp(c, 22).toFloat()))
             value = Ui.text(c, "—", 20f, bold = true)
             sub = Ui.hint(c, "")
             addView(value)
@@ -333,108 +530,5 @@ object Ui {
         ).apply { bottomMargin = dp(c, 12) }
         addView(left, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { rightMargin = dp(c, 6) })
         addView(right, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { leftMargin = dp(c, 6) })
-    }
-}
-
-/** Yumuşak çizgili, altı dolgulu mini hız grafiği. */
-class Sparkline(c: Context) : View(c) {
-    var data: LongArray = LongArray(0)
-        set(v) {
-            field = v
-            invalidate()
-        }
-    var lineColor = Color.WHITE
-
-    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
-    }
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        if (data.size < 2 || width == 0) return
-        val d = resources.displayMetrics.density
-        val max = (data.maxOrNull() ?: 0L).coerceAtLeast(1024L).toFloat()
-        val h = height - 3 * d
-        val step = width.toFloat() / (data.size - 1)
-        fun y(v: Long) = 2 * d + h - h * (v / max)
-
-        val path = Path()
-        path.moveTo(0f, y(data[0]))
-        for (i in 1 until data.size) {
-            val x0 = (i - 1) * step
-            val x1 = i * step
-            val mx = (x0 + x1) / 2
-            path.cubicTo(mx, y(data[i - 1]), mx, y(data[i]), x1, y(data[i]))
-        }
-        val area = Path(path).apply {
-            lineTo(width.toFloat(), height.toFloat())
-            lineTo(0f, height.toFloat())
-            close()
-        }
-        fill.shader = LinearGradient(
-            0f, 0f, 0f, height.toFloat(),
-            (lineColor and 0x00FFFFFF) or 0x55000000, lineColor and 0x00FFFFFF, Shader.TileMode.CLAMP
-        )
-        canvas.drawPath(area, fill)
-        line.color = lineColor
-        line.strokeWidth = 2.5f * d
-        canvas.drawPath(path, line)
-    }
-}
-
-/** Halka (donut) grafik. */
-class DonutChart(c: Context) : View(c) {
-    private var slices: List<Pair<Long, Int>> = emptyList()
-    private var center = ""
-    private var centerSub = ""
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.BUTT
-    }
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
-    private val primaryColor = Ui.primary(c)
-    private val secondaryColor = Ui.secondary(c)
-    private val track = Ui.outline(c)
-
-    fun set(values: List<Pair<Long, Int>>, centerText: String, sub: String) {
-        slices = values
-        center = centerText
-        centerSub = sub
-        invalidate()
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        val d = resources.displayMetrics.density
-        val stroke = 18 * d
-        val size = minOf(width, height) - stroke
-        val left = (width - size) / 2f
-        val top = (height - size) / 2f
-        val rect = RectF(left, top, left + size, top + size)
-        paint.strokeWidth = stroke
-        paint.color = track
-        canvas.drawArc(rect, 0f, 360f, false, paint)
-
-        val total = slices.sumOf { it.first }.toFloat()
-        if (total > 0) {
-            var start = -90f
-            slices.forEach { (v, color) ->
-                val sweep = 360f * v / total
-                paint.color = color
-                canvas.drawArc(rect, start, (sweep - 1.5f).coerceAtLeast(0.5f), false, paint)
-                start += sweep
-            }
-        }
-        textPaint.color = primaryColor
-        textPaint.textSize = 18 * d
-        textPaint.typeface = Typeface.DEFAULT_BOLD
-        canvas.drawText(center, width / 2f, height / 2f + 2 * d, textPaint)
-        textPaint.color = secondaryColor
-        textPaint.textSize = 11 * d
-        textPaint.typeface = Typeface.DEFAULT
-        canvas.drawText(centerSub, width / 2f, height / 2f + 18 * d, textPaint)
     }
 }

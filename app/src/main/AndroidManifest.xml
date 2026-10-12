@@ -3,6 +3,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Bağlantı türünü (Wi-Fi / mobil / VPN) okumak için; 2.0'dan beri eksikti -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -31,6 +33,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@android:style/Theme.DeviceDefault.DayNight">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -50,23 +53,8 @@
             android:label="Kurulum"
             android:theme="@android:style/Theme.DeviceDefault.DayNight" />
 
-        <activity
-            android:name=".HistoryActivity"
-            android:exported="false"
-            android:label="Günlük istatistik"
-            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
 
-        <activity
-            android:name=".AppsActivity"
-            android:exported="false"
-            android:label="Uygulama bazlı kullanım"
-            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
 
-        <activity
-            android:name=".AnalysisActivity"
-            android:exported="false"
-            android:label="Kullanım analizi"
-            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
 
         <activity
             android:name=".AppDetailActivity"

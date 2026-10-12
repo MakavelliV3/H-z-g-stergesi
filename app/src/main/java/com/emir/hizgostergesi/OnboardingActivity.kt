@@ -174,7 +174,31 @@ class OnboardingActivity : Activity() {
             last -> buttons.addView(Ui.button(this, "Başla", filled = true) { finishSetup() })
             else -> buttons.addView(Ui.button(this, if (index == 0) "Kuruluma başla" else "Devam", filled = true) { next() })
         }
+        if (index > 0) {
+            buttons.addView(android.widget.TextView(this).apply {
+                text = "← Geri"
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setTextColor(Ui.secondary(this@OnboardingActivity))
+                setPadding(0, Ui.dp(this@OnboardingActivity, 14), 0, Ui.dp(this@OnboardingActivity, 6))
+                isClickable = true
+                setOnClickListener { back() }
+            })
+        }
         root.addView(buttons)
+        Ui.fadeIn(root)
+    }
+
+    private fun back() {
+        if (index > 0) {
+            index--
+            render()
+        }
+    }
+
+    @Deprecated("Geri tuşu: bir önceki adıma dön")
+    override fun onBackPressed() {
+        if (index > 0) back() else @Suppress("DEPRECATION") super.onBackPressed()
     }
 
     private fun next() {

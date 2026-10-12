@@ -73,6 +73,8 @@ class SpeedService : Service() {
     private var windowStart = 0L
 
     private var lastNotification: Notification? = null
+    private var lastNotifKey = ""
+    private var lastNotifAt = 0L
     private var overlay: TextView? = null
     private var overlayStyle = ""
 
@@ -130,12 +132,7 @@ class SpeedService : Service() {
         when (intent?.action) {
             ACTION_RESET -> resetWindow(System.currentTimeMillis())
             ACTION_RESET_ROLL -> resetRoll()
-            ACTION_TOGGLE_OVERLAY -> {
-                prefs.edit().putBoolean(Prefs.OVERLAY, !prefs.getBoolean(Prefs.OVERLAY, false)).apply()
-                if (!Settings.canDrawOverlays(this)) {
-                    startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }
-            }
+            ACTION_TOGGLE_OVERLAY -> prefs.edit().putBoolean(Prefs.OVERLAY, !prefs.getBoolean(Prefs.OVERLAY, false)).apply()
         }
         if (intent?.action != null) {
             handler.removeCallbacks(tick)
@@ -292,9 +289,18 @@ class SpeedService : Service() {
             }
             if (lines.isEmpty()) lines += speedText
 
-            val n = build(down, up, bits, lines, color)
-            lastNotification = n
-            nm.notify(NOTIF_ID, n)
+            // Bildirimi sadece içerik değiştiyse (ya da 30 sn'de bir) yeniden çiz: pil ve işlemci tasarrufu
+            val key = lines.joinToString("|") + "|" + Fmt.compact(down, bits) + Fmt.compact(up, bits) + "|" +
+                listOf(Prefs.SB_MODE, Prefs.SB_SIZE, Prefs.SB_UNIT, Prefs.N_SIZE, Prefs.N_ARROWS, Prefs.N_BG).joinToString(",") { prefs.getInt(it, -1).toString() } +
+                listOf(Prefs.SB_BOLD, Prefs.SB_HIDE_IDLE, Prefs.N_MONO, Prefs.N_BTN_OVERLAY, Prefs.N_BTN_RESET, Prefs.N_BTN_ROLL_RESET, Prefs.N_LOCKSCREEN, Prefs.OVERLAY)
+                    .joinToString("") { if (prefs.getBoolean(it, false)) "1" else "0" } + color
+            if (key != lastNotifKey || nowEl - lastNotifAt > 30_000L) {
+                val n = build(down, up, bits, lines, color)
+                lastNotification = n
+                lastNotifKey = key
+                lastNotifAt = nowEl
+                nm.notify(NOTIF_ID, n)
+            }
             val overlayLine = if (prefs.getBoolean(Prefs.ROLL_OVERLAY, true)) roll.second else "$hours sa: ${Fmt.bytes(periodUsed)}"
             updateOverlay(down, up, bits, "$overlayLine$conn", color)
             val widgetLine = if (prefs.getBoolean(Prefs.ROLL_WIDGET, true)) roll.first else "Son $hours sa ($scope): ${Fmt.bytes(periodUsed)}"
@@ -421,15 +427,25 @@ class SpeedService : Service() {
 
         // Renkli arka plan (telefon destekliyorsa bildirimin kendisi boyanır)
         val bg = prefs.getInt(Prefs.N_BG, 0)
-        if (bg != 0) builder.setColorized(true).setColor(bg)
+        if (bg != 0) builder.setColorized(true).setColor(if (bg == SettingsActivity.BG_ACCENT) Ui.ACCENT else bg)
 
         if (prefs.getBoolean(Prefs.N_BTN_OVERLAY, true)) {
             val overlayOn = prefs.getBoolean(Prefs.OVERLAY, false)
-            val toggle = PendingIntent.getForegroundService(
-                this, 1,
-                Intent(this, SpeedService::class.java).setAction(ACTION_TOGGLE_OVERLAY),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
+            val toggle = if (Settings.canDrawOverlays(this)) {
+                PendingIntent.getForegroundService(
+                    this, 1,
+                    Intent(this, SpeedService::class.java).setAction(ACTION_TOGGLE_OVERLAY),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            } else {
+                // İzin yoksa doğrudan izin ekranını aç (arka plandan etkinlik başlatılamaz)
+                PendingIntent.getActivity(
+                    this, 4,
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            }
             builder.addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(this, android.R.drawable.ic_menu_view),
@@ -472,7 +488,8 @@ class SpeedService : Service() {
     // ---------- Widget ----------
 
     private fun updateWidgets(nowEl: Long, speed: String, today: String, period: String, color: Int) {
-        if (nowEl - lastWidgetAt < 3000) return
+        val every = prefs.getInt(Prefs.WIDGET_SEC, 15).coerceIn(3, 600) * 1000L
+        if (nowEl - lastWidgetAt < every) return
         lastWidgetAt = nowEl
         val mgr = AppWidgetManager.getInstance(this)
         val ids = mgr.getAppWidgetIds(ComponentName(this, SpeedWidget::class.java))
@@ -520,6 +537,7 @@ class SpeedService : Service() {
             x = prefs.getInt(Prefs.OVERLAY_X, (16 * d).toInt())
             y = prefs.getInt(Prefs.OVERLAY_Y, (120 * d).toInt())
         }
+        clamp(params)
         tv.setOnTouchListener(Drag(params))
         return try {
             wm.addView(tv, params)
@@ -528,6 +546,27 @@ class SpeedService : Service() {
             tv
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /** Pencere konumunu ekranın içinde tutar (döndürme ya da çözünürlük değişiminden sonra). */
+    private fun clamp(p: WindowManager.LayoutParams) {
+        val dm = resources.displayMetrics
+        val d = dm.density
+        p.x = p.x.coerceIn(0, (dm.widthPixels - (80 * d).toInt()).coerceAtLeast(0))
+        p.y = p.y.coerceIn(0, (dm.heightPixels - (48 * d).toInt()).coerceAtLeast(0))
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        overlay?.let { v ->
+            val p = v.layoutParams as? WindowManager.LayoutParams ?: return
+            clamp(p)
+            try {
+                wm.updateViewLayout(v, p)
+            } catch (e: Exception) {
+                // pencere kaldırılmış olabilir
+            }
         }
     }
 

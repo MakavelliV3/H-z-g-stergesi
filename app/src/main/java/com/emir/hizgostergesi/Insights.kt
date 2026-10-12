@@ -100,7 +100,7 @@ object Insights {
         }
         notify(
             c, REPORT_CHANNEL, WEEKLY_ID, "Geçen hafta ${Fmt.bytes(m + w)} veri kullandın", text,
-            Intent(c, AnalysisActivity::class.java)
+            Intent(c, MainActivity::class.java).putExtra(MainActivity.EXTRA_TAB, MainActivity.TAB_ANALYSIS)
         )
     }
 

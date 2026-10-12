@@ -76,6 +76,7 @@ object Prefs {
     const val UNIT_BASE = "birim_tabani"   // 1000 ya da 1024
     const val WIDGET_SEC = "widget_aralik_sn"
     const val ONBOARDED = "kurulum_tamam"
+    const val HEALTH_BATTERY_HIDDEN = "pil_uyarisi_gizli"
 
     // Analiz bildirimleri
     const val WEEKLY_ON = "haftalik_ozet"

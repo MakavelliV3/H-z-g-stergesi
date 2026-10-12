@@ -151,6 +151,10 @@ class AppDetailActivity : Activity() {
         chart.data = starts.indices.map { i ->
             Triple(dayLabel.format(java.util.Date(starts[i])), daily[i][0], daily[i][1])
         }
+        val tipFmt = SimpleDateFormat("d MMMM EEEE", Locale("tr"))
+        chart.tooltip = { i ->
+            "${tipFmt.format(java.util.Date(starts[i]))}\n${Fmt.bytes(daily[i][0] + daily[i][1])}  (mobil ${Fmt.bytes(daily[i][0])})"
+        }
 
         // Ayrıntılar (kart başlığı kalsın)
         while (body.childCount > 1) body.removeViewAt(1)
