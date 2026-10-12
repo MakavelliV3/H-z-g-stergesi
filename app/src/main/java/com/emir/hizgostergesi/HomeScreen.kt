@@ -37,6 +37,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     private lateinit var splitText: TextView
     private lateinit var peakText: TextView
     private lateinit var topApps: LinearLayout
+    private lateinit var planBox: LinearLayout
 
     private var ticks = 0
     private var appsLoadedOnce = false
@@ -66,6 +67,9 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         root.addView(health)
 
         root.addView(heroCard())
+
+        planBox = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(planBox)
 
         tileToday = Ui.StatTile(a, "Bugün")
         tileRoll = Ui.StatTile(a, "Son 1 saat")
@@ -193,8 +197,84 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         peakText.text = "Bugünün rekoru: mobil ${Fmt.speed(today.peakMobile, bits)} · Wi-Fi ${Fmt.speed(today.peakWifi, bits)}"
 
         if (ticks % 10 == 0) refreshHealth()
-        if (ticks % 30 == 0) loadTopApps()
+        if (ticks % 30 == 0) {
+            loadTopApps()
+            loadPlan()
+        }
         ticks++
+    }
+
+    private fun loadPlan() {
+        if (!PlanState.enabled(a)) {
+            renderPlan(null)
+            return
+        }
+        PlanState.last?.let { renderPlan(it) }
+        Thread {
+            val s = try { PlanState.compute(a) } catch (e: Exception) { null }
+            a.runOnUiThread { if (!a.isFinishing) renderPlan(s) }
+        }.start()
+    }
+
+    private fun renderPlan(s: PlanState.Snapshot?) {
+        planBox.removeAllViews()
+        val open = { a.startActivity(Intent(a, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_CATEGORY, SettingsActivity.CAT_PLAN)) }
+        if (s == null) {
+            if (prefs.getBoolean(Prefs.PLAN_PROMO_HIDDEN, false)) return
+            planBox.addView(banner("📦", "Paketini takip et", "Kalan GB'ı, günlük payını ve paketin yetip yetmeyeceğini gör.", "Ekle", dismiss = {
+                prefs.edit().putBoolean(Prefs.PLAN_PROMO_HIDDEN, true).apply()
+                renderPlan(null)
+            }) { open() })
+            return
+        }
+        val now = System.currentTimeMillis()
+        val days = PlanMath.daysLeft(now, s.end)
+        val over = s.used >= s.limit
+        val card = Ui.card(a, "Paketim", "📦").apply {
+            isClickable = true
+            setOnClickListener { open() }
+        }
+        val head = LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.BOTTOM
+        }
+        head.addView(Ui.text(a, Fmt.bytes(s.used), 26f, bold = true, color = if (over) 0xFFE53935.toInt() else Ui.primary(a)).apply {
+            setPadding(0, 0, dp(6), 0)
+        })
+        head.addView(Ui.hint(a, "/ ${Fmt.bytes(s.limit)}").apply { setPadding(0, 0, 0, dp(6)) })
+        head.addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
+        head.addView(Ui.text(a, "$days gün", 15f, color = Ui.accentText(a)).apply {
+            typeface = Ui.MEDIUM
+            setPadding(0, 0, 0, dp(6))
+        })
+        card.addView(head)
+        val barColor = when {
+            s.ratio >= 1 -> 0xFFE53935.toInt()
+            s.ratio >= 0.8 -> 0xFFFF9800.toInt()
+            else -> Ui.ACCENT
+        }
+        card.addView(PercentBar(a, s.ratio.toFloat(), barColor), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(10)).apply {
+            topMargin = dp(4)
+            bottomMargin = dp(10)
+        })
+        if (over) {
+            card.addView(Ui.text(a, "Paket bitti: ${Fmt.bytes(s.used - s.limit)} fazla kullanıldı.", 14f, color = 0xFFE53935.toInt()))
+        } else {
+            card.addView(Ui.text(a, "Kalan ${Fmt.bytes(s.remaining)} · bugün en fazla ~${Fmt.bytes(PlanMath.dailyAllowance(s.remaining, now, s.end))}", 14f))
+        }
+        val forecast = PlanMath.forecast(s.used, s.start, now, s.end)
+        val early = PlanMath.daysEarly(s.used, s.limit, s.start, now, s.end)
+        card.addView(Ui.hint(a, when {
+            over -> "Yenilenmeye $days gün var."
+            early != null && early > 0 -> "⚠ Bu tempoyla paket yenilenmeden yaklaşık $early gün önce biter (dönem sonu tahmini ~${Fmt.bytes(forecast)})."
+            early != null -> "⚠ Bu tempoyla paket dönemin son gününe yetişmeyebilir."
+            else -> "✓ Bu tempoyla paket yeter (dönem sonu tahmini ~${Fmt.bytes(forecast)})."
+        }))
+        if (s.night > 0 || prefs.getBoolean(Prefs.PLAN_NIGHT, false)) {
+            card.addView(Ui.hint(a, "🌙 Gece paketi saatlerinde ${Fmt.bytes(s.night)} kullanıldı (paketten düşülmedi)."))
+        }
+        if (!s.fromSystem) card.addView(Ui.hint(a, "Not: \"Kullanım erişimi\" izni olmadığı için sadece uygulama kurulduktan sonraki kullanım sayılıyor."))
+        planBox.addView(card)
     }
 
     /** Göstergenin düzgün çalışmasını engelleyen durumları üstte gösterir. */

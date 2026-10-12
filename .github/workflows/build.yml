@@ -70,6 +70,8 @@ jobs:
           gh release upload build-log build.log --clobber || true
 
   emulator:
+    # Emülatör testi uzun sürer (~15-20 dk): sadece commit mesajında [emu] varsa ya da elle başlatılınca çalışır
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[emu]')
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:

@@ -52,7 +52,8 @@ object Prefs {
     const val ROLL_RESET_AT = "kayan_sifirlama"
     const val N_BTN_ROLL_RESET = "bildirim_kayan_sifirla_dugmesi"
     val ROLL_OPTIONS = intArrayOf(1, 2, 3, 6, 12, 24)
-    const val N_LINE_PERIOD = "bildirim_donem"
+    // Yeni anahtar: dönem satırı artık varsayılan olarak kapalı (kayan sayaçla aynı bilgiyi tekrar etmesin)
+    const val N_LINE_PERIOD = "bildirim_donem_satiri"
     const val N_LINE_TODAY = "bildirim_bugun"
     const val N_LINE_PEAK = "bildirim_rekor"
     const val N_LINE_MONTH = "bildirim_ay"
@@ -77,6 +78,18 @@ object Prefs {
     const val WIDGET_SEC = "widget_aralik_sn"
     const val ONBOARDED = "kurulum_tamam"
     const val HEALTH_BATTERY_HIDDEN = "pil_uyarisi_gizli"
+
+    // Paket (tarife) takibi
+    const val PLAN_ON = "paket_acik"
+    const val PLAN_MB = "paket_mb"
+    const val PLAN_DAY = "paket_gun"
+    const val PLAN_NIGHT = "paket_gece"
+    const val NIGHT_START = "gece_bas"
+    const val NIGHT_END = "gece_bit"
+    const val PLAN_ALERTS = "paket_uyari"
+    const val PLAN_WARNED = "paket_uyarilan"
+    const val N_LINE_PLAN = "bildirim_paket"
+    const val PLAN_PROMO_HIDDEN = "paket_tanitim_gizli"
 
     // Analiz bildirimleri
     const val WEEKLY_ON = "haftalik_ozet"

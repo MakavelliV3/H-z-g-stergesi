@@ -61,6 +61,7 @@ class SpeedService : Service() {
     private var lastTickAt = 0L
     private var lastWidgetAt = 0L
     private var lastInsightsAt = -1L
+    private var lastPlanAt = -1L
     private var lastInteractive = true
     private var ticks = 0L
 
@@ -227,6 +228,13 @@ class SpeedService : Service() {
         lastInteractive = interactive
         StatsStore.save(this)
 
+        // Paket durumu: dakikada bir, arka planda
+        if (lastPlanAt < 0 || nowEl - lastPlanAt > 60_000L) {
+            lastPlanAt = nowEl
+            val ctx = applicationContext
+            Thread { try { PlanState.compute(ctx) } catch (e: Exception) { } }.start()
+        }
+
         // Haftalık özet ve olağandışı kullanım kontrolü: yarım saatte bir, arka planda
         if (lastInsightsAt < 0 || nowEl - lastInsightsAt > 15 * 60_000L) {
             lastInsightsAt = nowEl
@@ -261,7 +269,7 @@ class SpeedService : Service() {
             val (arrowDown, arrowUp) = arrows()
             val conn = if (prefs.getBoolean(Prefs.N_SHOW_CONN, true) && ConnInfo.label.isNotEmpty()) "  ·  ${ConnInfo.label}" else ""
             val speedText = "$arrowDown ${Fmt.speed(down, bits)}    $arrowUp ${Fmt.speed(up, bits)}$conn"
-            val periodText = "Son $hours sa ($scope): ${Fmt.bytes(periodUsed)} • " +
+            val periodText = "Dönem sayacı ($hours sa, $scope): ${Fmt.bytes(periodUsed)} • " +
                 "${Fmt.remaining(windowStart + periodMs - now)} sonra sıfırlanır"
             val todayText = "Bugün  Mobil ${Fmt.bytes(today.mobile)} • Wi-Fi ${Fmt.bytes(today.wifi)}"
 
@@ -278,7 +286,8 @@ class SpeedService : Service() {
                     lines.add(0, roll.first)
                 }
             }
-            if (prefs.getBoolean(Prefs.N_LINE_PERIOD, true)) lines += periodText
+            PlanState.last?.let { if (prefs.getBoolean(Prefs.N_LINE_PLAN, true)) lines += PlanState.line(it) }
+            if (prefs.getBoolean(Prefs.N_LINE_PERIOD, false)) lines += periodText
             if (prefs.getBoolean(Prefs.N_LINE_TODAY, true)) lines += todayText
             if (prefs.getBoolean(Prefs.N_LINE_PEAK, false)) {
                 lines += "Bugünün rekoru  Mobil ${Fmt.speed(today.peakMobile, bits)} • Wi-Fi ${Fmt.speed(today.peakWifi, bits)}"

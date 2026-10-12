@@ -52,6 +52,7 @@ class DayStats {
     /** Saat saat kullanım (0-23) ve saat saat hız ölçümleri. Eski günlerde boş bırakılır. */
     var hasHourly = true
     val hourUse = LongArray(24)
+    val hourMob = LongArray(24)
     val hourMobSec = DoubleArray(24)
     val hourMobBytes = LongArray(24)
     val hourWifiSec = DoubleArray(24)
@@ -69,6 +70,7 @@ class DayStats {
         val active = rate >= ACTIVE_RATE
         if (isMobile) {
             mobile += rx + tx
+            hourMob[h] += rx + tx
             if (rate > peakMobile) peakMobile = rate
             if (active) {
                 activeMobileSec += dt
@@ -107,6 +109,7 @@ class DayStats {
         }
         for (h in 0 until 24) {
             hourUse[h] += o.hourUse[h]
+            hourMob[h] += o.hourMob[h]
             hourMobSec[h] += o.hourMobSec[h]
             hourMobBytes[h] += o.hourMobBytes[h]
             hourWifiSec[h] += o.hourWifiSec[h]
@@ -118,6 +121,7 @@ class DayStats {
     fun dropHourly() {
         hasHourly = false
         hourUse.fill(0)
+        hourMob.fill(0)
         hourMobSec.fill(0.0)
         hourMobBytes.fill(0)
         hourWifiSec.fill(0.0)
@@ -138,6 +142,7 @@ class DayStats {
         }
         if (hasHourly) {
             o.put("hu", JSONArray(hourUse.toList()))
+            o.put("hmo", JSONArray(hourMob.toList()))
             o.put("hms", JSONArray(hourMobSec.toList()))
             o.put("hmb", JSONArray(hourMobBytes.toList()))
             o.put("hws", JSONArray(hourWifiSec.toList()))
@@ -181,6 +186,7 @@ class DayStats {
                 }
             }
             readLongs(o.optJSONArray("hu"), hourUse)
+            readLongs(o.optJSONArray("hmo"), hourMob)
             readDoubles(o.optJSONArray("hms"), hourMobSec)
             readLongs(o.optJSONArray("hmb"), hourMobBytes)
             readDoubles(o.optJSONArray("hws"), hourWifiSec)
@@ -264,6 +270,22 @@ object StatsStore {
     /** Verilen andaki günün kaydı (gece yarısını aşan ölçümleri doğru güne yazmak için). */
     @Synchronized
     fun dayAt(c: Context, time: Long): DayStats = all(c).getOrPut(key(time)) { DayStats() }
+
+    /** [start, end) aralığında gece saatlerindeki mobil kullanım (saatlik kayıtlardan). */
+    @Synchronized
+    fun nightMobile(c: Context, start: Long, end: Long, nightStart: Int, nightEnd: Int): Long {
+        val days = all(c)
+        var sum = 0L
+        val cal = Calendar.getInstance().apply { timeInMillis = start }
+        var guard = 0
+        while (cal.timeInMillis < end && guard++ < 62) {
+            days[key(cal.timeInMillis)]?.let { d ->
+                for (h in 0 until 24) if (PlanMath.isNight(h, nightStart, nightEnd)) sum += d.hourMob[h]
+            }
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return sum
+    }
 
     /** [start, end) aralığındaki günlerin (mobil, Wi-Fi) toplamı; başka thread'den güvenle çağrılır. */
     @Synchronized

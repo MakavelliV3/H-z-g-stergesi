@@ -27,6 +27,10 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         "Bildirim arka plan rengi" to SettingsActivity.CAT_NOTIF,
         "Bildirim düğmeleri" to SettingsActivity.CAT_NOTIF,
         "Kilit ekranında gizle" to SettingsActivity.CAT_NOTIF,
+        "Paket takibi (tarife, kota)" to SettingsActivity.CAT_PLAN,
+        "Paket yenilenme günü" to SettingsActivity.CAT_PLAN,
+        "Gece paketi" to SettingsActivity.CAT_PLAN,
+        "Paket uyarısı (%80, %100)" to SettingsActivity.CAT_PLAN,
         "Son X saat (kayan sayaç)" to SettingsActivity.CAT_COUNTERS,
         "Kayan sayacı sıfırla" to SettingsActivity.CAT_COUNTERS,
         "Dönem sayacı" to SettingsActivity.CAT_COUNTERS,
@@ -50,7 +54,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
     )
 
     private val icons = mapOf(
-        SettingsActivity.CAT_STATUS to "📶", SettingsActivity.CAT_NOTIF to "🔔", SettingsActivity.CAT_COUNTERS to "⏱",
+        SettingsActivity.CAT_STATUS to "📶", SettingsActivity.CAT_NOTIF to "🔔", SettingsActivity.CAT_PLAN to "📦", SettingsActivity.CAT_COUNTERS to "⏱",
         SettingsActivity.CAT_ALERTS to "🚨", SettingsActivity.CAT_OVERLAY to "🪟", SettingsActivity.CAT_LOOK to "🎨",
         SettingsActivity.CAT_BATTERY to "🔋", SettingsActivity.CAT_ABOUT to "🧭"
     )
@@ -86,10 +90,12 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
                 when (prefs.getInt(Prefs.SB_UNIT, 0)) { 1 -> "kısa birim"; 2 -> "birimsiz"; else -> "tam birim" }
             ).joinToString(" · ")
             SettingsActivity.CAT_NOTIF -> {
-                val lines = listOf(Prefs.N_LINE_SPEED to true, Prefs.N_LINE_PERIOD to true, Prefs.N_LINE_TODAY to true,
+                val lines = listOf(Prefs.N_LINE_SPEED to true, Prefs.N_LINE_PERIOD to false, Prefs.N_LINE_TODAY to true,
                     Prefs.N_LINE_PEAK to false, Prefs.N_LINE_MONTH to false).count { prefs.getBoolean(it.first, it.second) }
                 "$lines satır · ${when (prefs.getInt(Prefs.N_SIZE, 1)) { 0 -> "küçük"; 2 -> "büyük"; else -> "normal" }} yazı"
             }
+            SettingsActivity.CAT_PLAN -> if (prefs.getBoolean(Prefs.PLAN_ON, false))
+                "${Fmt.mb(prefs.getInt(Prefs.PLAN_MB, 0))} · her ayın ${prefs.getInt(Prefs.PLAN_DAY, 1)}. günü yenilenir" else "Kapalı · kalan GB ve günlük payını gör"
             SettingsActivity.CAT_COUNTERS -> "Son ${prefs.getInt(Prefs.ROLL_HOURS, 1)} saat (kayan) · dönem ${prefs.getInt(Prefs.HOURS, 1)} saat"
             SettingsActivity.CAT_ALERTS -> {
                 val q = prefs.getInt(Prefs.QUOTA_MB, 0)

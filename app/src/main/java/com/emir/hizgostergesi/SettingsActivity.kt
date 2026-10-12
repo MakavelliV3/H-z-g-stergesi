@@ -30,6 +30,7 @@ class SettingsActivity : Activity() {
         const val CAT_STATUS = "durum"
         const val CAT_NOTIF = "bildirim"
         const val CAT_COUNTERS = "sayac"
+        const val CAT_PLAN = "paket"
         const val CAT_ALERTS = "uyari"
         const val CAT_OVERLAY = "pencere"
         const val CAT_LOOK = "gorunum"
@@ -40,7 +41,7 @@ class SettingsActivity : Activity() {
         const val BG_ACCENT = 1
 
         val TITLES = mapOf(
-            CAT_STATUS to "Durum çubuğu", CAT_NOTIF to "Bildirim paneli", CAT_COUNTERS to "Sayaçlar",
+            CAT_STATUS to "Durum çubuğu", CAT_NOTIF to "Bildirim paneli", CAT_PLAN to "Paketim", CAT_COUNTERS to "Sayaçlar",
             CAT_ALERTS to "Uyarılar", CAT_OVERLAY to "Yüzen pencere", CAT_LOOK to "Görünüm",
             CAT_BATTERY to "Pil ve widget", CAT_ABOUT to "Kurulum ve hakkında"
         )
@@ -69,6 +70,7 @@ class SettingsActivity : Activity() {
             CAT_STATUS -> statusBar(root)
             CAT_NOTIF -> notification(root)
             CAT_COUNTERS -> counters(root)
+            CAT_PLAN -> plan(root)
             CAT_ALERTS -> alerts(root)
             CAT_OVERLAY -> overlay(root)
             CAT_LOOK -> look(root)
@@ -154,7 +156,8 @@ class SettingsActivity : Activity() {
             addView(Ui.hint(ctx, "Bildirim kapalıyken ilk iki satır, aşağı çekince seçtiğin tüm satırlar görünür. Değişiklikler bir saniye içinde uygulanır."))
             listOf(
                 Triple("Anlık hız", Prefs.N_LINE_SPEED, true),
-                Triple("Dönem kullanımı", Prefs.N_LINE_PERIOD, true),
+                Triple("Paket durumu (paket takibi açıksa)", Prefs.N_LINE_PLAN, true),
+                Triple("Dönem sayacı (sabit pencere)", Prefs.N_LINE_PERIOD, false),
                 Triple("Bugün: mobil / Wi-Fi", Prefs.N_LINE_TODAY, true),
                 Triple("Bugünün rekor hızı", Prefs.N_LINE_PEAK, false),
                 Triple("Bu ayın toplamı", Prefs.N_LINE_MONTH, false)
@@ -187,6 +190,88 @@ class SettingsActivity : Activity() {
             addView(Ui.switch(ctx, "\"Sayacı sıfırla\" düğmesi", prefs.getBoolean(Prefs.N_BTN_RESET, false)) { put(Prefs.N_BTN_RESET, it) })
             addView(Ui.switch(ctx, "\"Son X saati sıfırla\" düğmesi", prefs.getBoolean(Prefs.N_BTN_ROLL_RESET, false)) { put(Prefs.N_BTN_ROLL_RESET, it) })
             addView(Ui.switch(ctx, "Kilit ekranında ayrıntıları göster", prefs.getBoolean(Prefs.N_LOCKSCREEN, true)) { put(Prefs.N_LOCKSCREEN, it) })
+        })
+    }
+
+    // ---------- Paket ----------
+
+    private fun refreshPlan() {
+        val ctx = applicationContext
+        Thread { try { PlanState.compute(ctx) } catch (e: Exception) { } }.start()
+    }
+
+    private fun plan(root: LinearLayout) {
+        val ctx = this
+        root.addView(Ui.card(ctx, "Paket takibi", "📦").apply {
+            addView(Ui.hint(ctx, "Operatör paketindeki mobil veriyi takip eder: kalan GB, kalan gün, günlük pay ve paketin yetip yetmeyeceği. Sadece mobil veri sayılır."))
+            addView(Ui.switch(ctx, "Paket takibini aç", prefs.getBoolean(Prefs.PLAN_ON, false)) {
+                put(Prefs.PLAN_ON, it)
+                if (it && prefs.getInt(Prefs.PLAN_MB, 0) <= 0) put(Prefs.PLAN_MB, 20 * 1024)
+                refreshPlan()
+            })
+            addView(Ui.label(ctx, "Paket büyüklüğü"))
+            val sizes = listOf(1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 40, 50, 100).map { "$it GB" to it * 1024 }
+            addView(Ui.choiceRow(ctx, sizes, prefs.getInt(Prefs.PLAN_MB, 20 * 1024)) {
+                put(Prefs.PLAN_MB, it)
+                refreshPlan()
+            })
+            val customRow = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val gbInput = EditText(ctx).apply {
+                hint = "Başka bir miktar (GB), ör. 12,5"
+                isSingleLine = true
+                textSize = 15f
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                setTextColor(Ui.primary(ctx))
+                setHintTextColor(Ui.secondary(ctx))
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+                background = Ui.rounded(Color.TRANSPARENT, dp(50).toFloat(), dp(1), Ui.outline(ctx))
+            }
+            customRow.addView(gbInput, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                rightMargin = dp(8)
+                topMargin = dp(8)
+            })
+            customRow.addView(Ui.button(ctx, "Kaydet") {
+                val gb = gbInput.text.toString().replace(',', '.').trim().toDoubleOrNull()
+                if (gb == null || gb <= 0 || gb > 10_000) {
+                    toast("Geçerli bir GB değeri yaz")
+                } else {
+                    put(Prefs.PLAN_MB, (gb * 1024).toInt())
+                    put(Prefs.PLAN_ON, true)
+                    toast("Paket ${Fmt.mb((gb * 1024).toInt())} olarak kaydedildi")
+                    refreshPlan()
+                    recreate()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+            addView(customRow)
+            addView(Ui.seekRow(ctx, "Yenilenme günü (ayın)", 1, 31, prefs.getInt(Prefs.PLAN_DAY, 1), ".") {
+                put(Prefs.PLAN_DAY, it)
+                refreshPlan()
+            })
+            addView(Ui.hint(ctx, "Paketin her ay hangi gün yenileniyor? 29-31 seçilirse o günü olmayan aylarda ayın son günü sayılır."))
+        })
+        root.addView(Ui.card(ctx, "Gece paketi", "🌙").apply {
+            addView(Ui.hint(ctx, "Operatörün gece saatleri için ayrı bir paketi varsa, bu saatlerdeki mobil kullanım ana paketten düşülmez."))
+            addView(Ui.switch(ctx, "Gece saatlerini ayrı say", prefs.getBoolean(Prefs.PLAN_NIGHT, false)) {
+                put(Prefs.PLAN_NIGHT, it)
+                refreshPlan()
+            })
+            addView(Ui.seekRow(ctx, "Başlangıç saati", 0, 23, prefs.getInt(Prefs.NIGHT_START, 0), ":00") {
+                put(Prefs.NIGHT_START, it)
+                refreshPlan()
+            })
+            addView(Ui.seekRow(ctx, "Bitiş saati", 0, 23, prefs.getInt(Prefs.NIGHT_END, 8), ":00") {
+                put(Prefs.NIGHT_END, it)
+                refreshPlan()
+            })
+            addView(Ui.hint(ctx, "Gece kullanımı uygulamanın kendi saatlik ölçümlerinden hesaplanır (kurulumdan sonrası)."))
+        })
+        root.addView(Ui.card(ctx, "Uyarı ve gösterim", "🔔").apply {
+            addView(Ui.switch(ctx, "%80 ve %100'e gelince bildir", prefs.getBoolean(Prefs.PLAN_ALERTS, true)) { put(Prefs.PLAN_ALERTS, it) })
+            addView(Ui.switch(ctx, "Bildirim panelinde paket satırı", prefs.getBoolean(Prefs.N_LINE_PLAN, true)) { put(Prefs.N_LINE_PLAN, it) })
+            addView(Ui.hint(ctx, "\"Kullanım erişimi\" izni varsa dönem başından bu yana tüm kullanım (kurulumdan öncesi dahil) Android'in kayıtlarından okunur."))
         })
     }
 
