@@ -220,7 +220,7 @@ class SpeedService : Service() {
         val kind = ConnInfo.kind
         today.addConn(if (kind in ConnInfo.CELL_KINDS) kind else "Mobil", dMobRx, dMobTx, dt)
         today.addConn(if (kind == "Ethernet") "Ethernet" else "Wi-Fi", dWifiRx, dWifiTx, dt)
-        if (++ticks % 15 == 0) ConnInfo.refresh(this)
+        if (++ticks % 15 == 0L) ConnInfo.refresh(this)
         val interactive = power.isInteractive
         // Bu turdaki veri, bir önceki turdan beri akan veridir: o sırada ekran kapalıysa "ekran kapalı" sayılır
         if (!lastInteractive) today.screenOff += dTotRx + dTotTx
