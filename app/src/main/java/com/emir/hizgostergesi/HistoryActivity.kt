@@ -197,6 +197,12 @@ class BarChart(c: Context) : View(c) {
     var wifiColor = 0xFF2196F3.toInt()
     var textColor = 0xFF888888.toInt()
 
+    /** Üstteki "en yüksek" yazısı nasıl biçimlensin (varsayılan: bayt). */
+    var topLabel: (Long) -> String = { "En yüksek: ${Fmt.bytes(it)}" }
+
+    /** Çok çubuk varken her kaçıncı çubuğun altına etiket yazılsın. */
+    var labelEvery = 5
+
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     override fun onDraw(canvas: Canvas) {
@@ -222,7 +228,7 @@ class BarChart(c: Context) : View(c) {
             canvas.drawRect(left, bottom - mh, right, bottom, paint)
             paint.color = wifiColor
             canvas.drawRect(left, bottom - mh - wh, right, bottom - mh, paint)
-            if (data.size <= 12 || i % 5 == 0 || i == data.lastIndex) {
+            if (data.size <= 12 || i % labelEvery == 0 || i == data.lastIndex) {
                 paint.color = textColor
                 paint.textAlign = Paint.Align.CENTER
                 canvas.drawText(label, cx, height - 4 * d, paint)
@@ -230,6 +236,6 @@ class BarChart(c: Context) : View(c) {
         }
         paint.color = textColor
         paint.textAlign = Paint.Align.LEFT
-        canvas.drawText("En yüksek: ${Fmt.bytes(max)}", 0f, 12 * d, paint)
+        canvas.drawText(topLabel(max), 0f, 12 * d, paint)
     }
 }

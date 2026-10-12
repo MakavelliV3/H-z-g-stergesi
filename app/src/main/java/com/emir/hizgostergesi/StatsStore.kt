@@ -3,6 +3,7 @@ package com.emir.hizgostergesi
 import android.content.Context
 import android.os.SystemClock
 import android.util.AtomicFile
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
@@ -22,26 +23,44 @@ class DayStats {
     var activeWifiSec = 0.0
     var activeWifiBytes = 0L
 
+    /** Ekran kapalıyken harcanan veri. */
+    var screenOff = 0L
+
+    /** Saat saat kullanım (0-23) ve saat saat hız ölçümleri. Eski günlerde boş bırakılır. */
+    var hasHourly = true
+    val hourUse = LongArray(24)
+    val hourMobSec = DoubleArray(24)
+    val hourMobBytes = LongArray(24)
+    val hourWifiSec = DoubleArray(24)
+    val hourWifiBytes = LongArray(24)
+
     /** Ortalama: sadece gerçekten veri akan saniyelerdeki ortalama indirme hızı. */
     val avgMobile: Long get() = if (activeMobileSec >= 1) (activeMobileBytes / activeMobileSec).toLong() else 0L
     val avgWifi: Long get() = if (activeWifiSec >= 1) (activeWifiBytes / activeWifiSec).toLong() else 0L
 
-    fun add(isMobile: Boolean, rx: Long, tx: Long, dt: Double) {
+    fun add(isMobile: Boolean, rx: Long, tx: Long, dt: Double, hour: Int) {
         if (rx + tx == 0L) return
+        val h = hour.coerceIn(0, 23)
+        hourUse[h] += rx + tx
         val rate = (rx / dt).toLong()
+        val active = rate >= ACTIVE_RATE
         if (isMobile) {
             mobile += rx + tx
             if (rate > peakMobile) peakMobile = rate
-            if (rate >= ACTIVE_RATE) {
+            if (active) {
                 activeMobileSec += dt
                 activeMobileBytes += rx
+                hourMobSec[h] += dt
+                hourMobBytes[h] += rx
             }
         } else {
             wifi += rx + tx
             if (rate > peakWifi) peakWifi = rate
-            if (rate >= ACTIVE_RATE) {
+            if (active) {
                 activeWifiSec += dt
                 activeWifiBytes += rx
+                hourWifiSec[h] += dt
+                hourWifiBytes[h] += rx
             }
         }
     }
@@ -56,17 +75,56 @@ class DayStats {
         activeMobileBytes += o.activeMobileBytes
         activeWifiSec += o.activeWifiSec
         activeWifiBytes += o.activeWifiBytes
+        screenOff += o.screenOff
+        for (h in 0 until 24) {
+            hourUse[h] += o.hourUse[h]
+            hourMobSec[h] += o.hourMobSec[h]
+            hourMobBytes[h] += o.hourMobBytes[h]
+            hourWifiSec[h] += o.hourWifiSec[h]
+            hourWifiBytes[h] += o.hourWifiBytes[h]
+        }
     }
 
-    fun toJson(): JSONObject = JSONObject()
-        .put("m", mobile).put("w", wifi)
-        .put("pm", peakMobile).put("pw", peakWifi)
-        .put("ams", activeMobileSec).put("amb", activeMobileBytes)
-        .put("aws", activeWifiSec).put("awb", activeWifiBytes)
+    /** Saatlik ayrıntıyı bırakır (eski günlerde dosyayı küçük tutmak için). */
+    fun dropHourly() {
+        hasHourly = false
+        hourUse.fill(0)
+        hourMobSec.fill(0.0)
+        hourMobBytes.fill(0)
+        hourWifiSec.fill(0.0)
+        hourWifiBytes.fill(0)
+    }
+
+    fun toJson(): JSONObject {
+        val o = JSONObject()
+            .put("m", mobile).put("w", wifi)
+            .put("pm", peakMobile).put("pw", peakWifi)
+            .put("ams", activeMobileSec).put("amb", activeMobileBytes)
+            .put("aws", activeWifiSec).put("awb", activeWifiBytes)
+            .put("so", screenOff)
+        if (hasHourly) {
+            o.put("hu", JSONArray(hourUse.toList()))
+            o.put("hms", JSONArray(hourMobSec.toList()))
+            o.put("hmb", JSONArray(hourMobBytes.toList()))
+            o.put("hws", JSONArray(hourWifiSec.toList()))
+            o.put("hwb", JSONArray(hourWifiBytes.toList()))
+        }
+        return o
+    }
 
     companion object {
         /** Bu hızın altındaki saniyeler "boşta" sayılır, ortalamaya katılmaz. */
         const val ACTIVE_RATE = 5L * 1024
+
+        private fun readLongs(a: JSONArray?, into: LongArray) {
+            if (a == null) return
+            for (i in 0 until minOf(24, a.length())) into[i] = a.optLong(i)
+        }
+
+        private fun readDoubles(a: JSONArray?, into: DoubleArray) {
+            if (a == null) return
+            for (i in 0 until minOf(24, a.length())) into[i] = a.optDouble(i, 0.0)
+        }
 
         fun fromJson(o: JSONObject) = DayStats().apply {
             mobile = o.optLong("m")
@@ -77,6 +135,12 @@ class DayStats {
             activeMobileBytes = o.optLong("amb")
             activeWifiSec = o.optDouble("aws", 0.0)
             activeWifiBytes = o.optLong("awb")
+            screenOff = o.optLong("so")
+            readLongs(o.optJSONArray("hu"), hourUse)
+            readDoubles(o.optJSONArray("hms"), hourMobSec)
+            readLongs(o.optJSONArray("hmb"), hourMobBytes)
+            readDoubles(o.optJSONArray("hws"), hourWifiSec)
+            readLongs(o.optJSONArray("hwb"), hourWifiBytes)
         }
     }
 }
@@ -151,14 +215,18 @@ object StatsStore {
     @Synchronized
     fun save(c: Context, force: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
-        if (!force && now - lastSave < 15_000) return
+        if (!force && now - lastSave < 30_000) return
         lastSave = now
         val map = all(c)
         val months = archivedMonths(c)
         while (map.size > KEEP_DAYS) {
             val old = map.pollFirstEntry() ?: break
-            months.getOrPut(old.key.take(7)) { DayStats() }.merge(old.value)
+            months.getOrPut(old.key.take(7)) { DayStats().apply { dropHourly() } }.merge(old.value)
         }
+        // Saatlik ayrıntı sadece son 60 gün için tutulur
+        val hourlyCutoff = key(System.currentTimeMillis() - 60L * 86_400_000L)
+        map.forEach { (k, v) -> if (k < hourlyCutoff && v.hasHourly) v.dropHourly() }
+        months.values.forEach { if (it.hasHourly) it.dropHourly() }
         val d = JSONObject()
         map.forEach { (k, v) -> d.put(k, v.toJson()) }
         val m = JSONObject()

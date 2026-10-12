@@ -44,6 +44,18 @@
             android:label="Uygulama bazlı kullanım"
             android:theme="@android:style/Theme.DeviceDefault.DayNight" />
 
+        <activity
+            android:name=".AnalysisActivity"
+            android:exported="false"
+            android:label="Kullanım analizi"
+            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
+
+        <activity
+            android:name=".AppDetailActivity"
+            android:exported="false"
+            android:label="Uygulama ayrıntısı"
+            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
+
         <service
             android:name=".SpeedService"
             android:exported="false"

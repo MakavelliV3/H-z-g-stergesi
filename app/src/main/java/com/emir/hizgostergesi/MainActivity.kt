@@ -336,17 +336,23 @@ class MainActivity : Activity() {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(12) }
         }
-        row.addView(navTile("📊", "İstatistik", "Günlük · aylık · yıllık") {
+        row.addView(navTile("📊", "İstatistik", "Gün · ay · yıl") {
             startActivity(Intent(this, HistoryActivity::class.java))
-        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(6) })
-        row.addView(navTile("📱", "Uygulamalar", "Kim ne kadar harcadı") {
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(5) })
+        row.addView(navTile("📱", "Uygulamalar", "Kim ne harcadı") {
             startActivity(Intent(this, AppsActivity::class.java))
-        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(6) })
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            leftMargin = dp(5)
+            rightMargin = dp(5)
+        })
+        row.addView(navTile("🔍", "Analiz", "Saat · tahmin") {
+            startActivity(Intent(this, AnalysisActivity::class.java))
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(5) })
         return row
     }
 
     private fun navTile(emoji: String, title: String, sub: String, onClick: () -> Unit): View {
-        val pad = dp(16)
+        val pad = dp(12)
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
@@ -354,7 +360,7 @@ class MainActivity : Activity() {
             isClickable = true
             setOnClickListener { onClick() }
             addView(Ui.text(this@MainActivity, emoji, 26f))
-            addView(Ui.text(this@MainActivity, title, 16f, bold = true, topDp = 4))
+            addView(Ui.text(this@MainActivity, title, 13f, bold = true, topDp = 4).apply { maxLines = 1 })
             addView(Ui.hint(this@MainActivity, sub))
         }
     }

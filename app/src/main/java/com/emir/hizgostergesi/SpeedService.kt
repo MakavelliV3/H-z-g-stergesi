@@ -37,6 +37,7 @@ import android.view.WindowManager
 import android.widget.RemoteViews
 import android.widget.TextView
 import android.widget.Toast
+import java.util.Calendar
 
 /**
  * Telefonun bayt sayaçlarını okuyup:
@@ -59,6 +60,8 @@ class SpeedService : Service() {
     private var lastMobTx = 0L
     private var lastTickAt = 0L
     private var lastWidgetAt = 0L
+    private var lastInsightsAt = -1L
+    private var lastInteractive = true
 
     private var usedMobile = 0L
     private var usedWifi = 0L
@@ -99,6 +102,7 @@ class SpeedService : Service() {
         lastMobRx = pos(TrafficStats.getMobileRxBytes())
         lastMobTx = pos(TrafficStats.getMobileTxBytes())
         lastTickAt = SystemClock.elapsedRealtime()
+        lastInteractive = power.isInteractive
 
         windowStart = prefs.getLong(Prefs.WINDOW_START, 0L).takeIf { it > 0 } ?: System.currentTimeMillis()
         usedMobile = prefs.getLong(Prefs.USED_MOBILE, 0L)
@@ -200,11 +204,23 @@ class SpeedService : Service() {
         lastDown = down
         lastUp = up
 
-        // Günlük istatistik
+        // Günlük istatistik (saat saat ve ekran durumuyla birlikte)
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         val today = StatsStore.today(this)
-        today.add(true, dMobRx, dMobTx, dt)
-        today.add(false, dWifiRx, dWifiTx, dt)
+        today.add(true, dMobRx, dMobTx, dt, hour)
+        today.add(false, dWifiRx, dWifiTx, dt, hour)
+        val interactive = power.isInteractive
+        // Bu turdaki veri, bir önceki turdan beri akan veridir: o sırada ekran kapalıysa "ekran kapalı" sayılır
+        if (!lastInteractive) today.screenOff += dTotRx + dTotTx
+        lastInteractive = interactive
         StatsStore.save(this)
+
+        // Haftalık özet ve olağandışı kullanım kontrolü: yarım saatte bir, arka planda
+        if (lastInsightsAt < 0 || nowEl - lastInsightsAt > 30 * 60_000L) {
+            lastInsightsAt = nowEl
+            val ctx = applicationContext
+            Thread { Insights.runChecks(ctx) }.start()
+        }
 
         // Dönem sayacı
         val hours = prefs.getInt(Prefs.HOURS, 1)
@@ -220,7 +236,7 @@ class SpeedService : Service() {
         checkQuota(periodUsed, mobileOnly, hours)
 
         // Ekran kapalıyken (istenirse) sadece sayaç tut, göstergeleri çizme
-        val slow = prefs.getBoolean(Prefs.SLOW_WHEN_OFF, true) && !power.isInteractive
+        val slow = prefs.getBoolean(Prefs.SLOW_WHEN_OFF, true) && !interactive
         if (!slow) {
             val bits = prefs.getBoolean(Prefs.UNIT_BITS, false)
             val color = prefs.getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR)

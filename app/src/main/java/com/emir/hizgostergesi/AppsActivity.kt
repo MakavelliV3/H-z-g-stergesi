@@ -1,37 +1,22 @@
 package com.emir.hizgostergesi
 
 import android.app.Activity
-import android.app.AppOpsManager
-import android.app.usage.NetworkStats
-import android.app.usage.NetworkStatsManager
 import android.content.Intent
 import android.graphics.Typeface
-import android.graphics.drawable.Drawable
-import android.net.ConnectivityManager
 import android.os.Bundle
-import android.os.Process
 import android.provider.Settings
 import android.view.Gravity
-import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.util.Calendar
 
-/** Hangi uygulama ne kadar mobil veri / Wi-Fi kullandı. "Kullanım erişimi" izni ister. */
+/** Hangi uygulama ne kadar veri kullandı. "Kullanım erişimi" izni ister. Dokununca ayrıntı açılır. */
 class AppsActivity : Activity() {
-
-    private class Row(val uid: Int) {
-        var mobile = 0L
-        var wifi = 0L
-        var name = ""
-        var icon: Drawable? = null
-        val total get() = mobile + wifi
-    }
 
     private lateinit var status: TextView
     private lateinit var content: LinearLayout
     private var range = 0
+    private var sort = 0 // 0: toplam, 1: arka plan, 2: mobil
     private var loadId = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,11 +24,15 @@ class AppsActivity : Activity() {
         val (scroll, root) = Ui.page(this)
 
         root.addView(Ui.choiceRow(
-            this,
-            listOf("Bugün" to 0, "Bu dönem" to 1, "Son 7 gün" to 2, "Son 30 gün" to 3),
-            range
+            this, listOf("Bugün" to 0, "Bu dönem" to 1, "Son 7 gün" to 2, "Son 30 gün" to 3), range
         ) {
             range = it
+            load()
+        })
+        root.addView(Ui.choiceRow(
+            this, listOf("En çok toplam" to 0, "En çok arka plan" to 1, "En çok mobil" to 2), sort
+        ) {
+            sort = it
             load()
         })
         status = Ui.hint(this, "")
@@ -55,29 +44,24 @@ class AppsActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (hasAccess()) load() else askAccess()
-    }
-
-    private fun hasAccess(): Boolean {
-        val ops = getSystemService(AppOpsManager::class.java)
-        return ops.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), packageName) ==
-            AppOpsManager.MODE_ALLOWED
+        if (NetStats.hasAccess(this)) load() else askAccess()
     }
 
     private fun askAccess() {
         status.text = ""
         content.removeAllViews()
-        content.addView(Ui.text(this, "İzin gerekiyor", 18f, bold = true, topDp = 12))
-        content.addView(Ui.text(this,
-            "Uygulamaların ne kadar veri kullandığını görmek için Android'in \"Kullanım erişimi\" izni lazım. " +
-                "Açılan listede Hız Göstergesi'ni bulup izni aç, sonra geri dön.", 15f))
-        content.addView(Ui.button(this, "İzin ver", filled = true) {
-            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        content.addView(Ui.card(this, "İzin gerekiyor").apply {
+            addView(Ui.text(this@AppsActivity,
+                "Uygulamaların ne kadar veri kullandığını görmek için Android'in \"Kullanım erişimi\" izni lazım. " +
+                    "Açılan listede Hız Göstergesi'ni bulup izni aç, sonra geri dön.", 15f))
+            addView(Ui.button(this@AppsActivity, "İzin ver", filled = true) {
+                startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+            })
         })
     }
 
     private fun load() {
-        if (!hasAccess()) {
+        if (!NetStats.hasAccess(this)) {
             askAccess()
             return
         }
@@ -85,20 +69,15 @@ class AppsActivity : Activity() {
         status.text = "Yükleniyor…"
         val (start, end) = rangeMillis()
         Thread {
-            val rows = query(start, end)
-            runOnUiThread { if (id == loadId) render(rows) }
+            val rows = NetStats.queryApps(this, start, end)
+            runOnUiThread { if (id == loadId && !isFinishing) render(rows) }
         }.start()
     }
 
     private fun rangeMillis(): Pair<Long, Long> {
         val now = System.currentTimeMillis()
         val start = when (range) {
-            0 -> Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
+            0 -> Insights.startOfToday()
             1 -> Prefs.get(this).getLong(Prefs.WINDOW_START, now - 3_600_000L)
             2 -> now - 7 * 86_400_000L
             else -> now - 30 * 86_400_000L
@@ -106,73 +85,35 @@ class AppsActivity : Activity() {
         return start to now + 60_000L
     }
 
-    @Suppress("DEPRECATION")
-    private fun query(start: Long, end: Long): List<Row> {
-        val nsm = getSystemService(NetworkStatsManager::class.java)
-        val map = HashMap<Int, Row>()
-
-        fun collect(type: Int) {
-            try {
-                val stats = nsm.querySummary(type, null, start, end)
-                val b = NetworkStats.Bucket()
-                while (stats.hasNextBucket()) {
-                    stats.getNextBucket(b)
-                    val row = map.getOrPut(b.uid) { Row(b.uid) }
-                    val bytes = b.rxBytes + b.txBytes
-                    if (type == ConnectivityManager.TYPE_MOBILE) row.mobile += bytes else row.wifi += bytes
-                }
-                stats.close()
-            } catch (e: Exception) {
-                // bu ağ türü için veri yok
-            }
-        }
-        collect(ConnectivityManager.TYPE_MOBILE)
-        collect(ConnectivityManager.TYPE_WIFI)
-
-        val rows = map.values.filter { it.total > 0 }.sortedByDescending { it.total }.take(60)
-        rows.forEach { describe(it) }
-        return rows
-    }
-
-    private fun describe(r: Row) {
-        when (r.uid) {
-            NetworkStats.Bucket.UID_REMOVED -> r.name = "Kaldırılmış uygulamalar"
-            NetworkStats.Bucket.UID_TETHERING -> r.name = "Hotspot / internet paylaşımı"
-            Process.SYSTEM_UID -> r.name = "Android sistemi"
-            0 -> r.name = "Sistem çekirdeği"
-            else -> {
-                val pkgs = packageManager.getPackagesForUid(r.uid)
-                if (pkgs.isNullOrEmpty()) {
-                    r.name = "Bilinmeyen (uid ${r.uid})"
-                    return
-                }
-                try {
-                    val ai = packageManager.getApplicationInfo(pkgs[0], 0)
-                    val label = ai.loadLabel(packageManager).toString()
-                    r.name = if (pkgs.size > 1) "$label +${pkgs.size - 1}" else label
-                    r.icon = ai.loadIcon(packageManager)
-                } catch (e: Exception) {
-                    r.name = pkgs[0]
-                }
-            }
-        }
-    }
-
-    private fun render(rows: List<Row>) {
+    private fun render(all: List<AppUsage>) {
         content.removeAllViews()
-        if (rows.isEmpty()) {
+        if (all.isEmpty()) {
             status.text = "Bu aralık için kayıt bulunamadı."
             return
         }
-        val total = rows.sumOf { it.total }
-        status.text = "Toplam ${Fmt.bytes(total)} • en çok kullanan ${rows.size} uygulama"
+        val rows = when (sort) {
+            1 -> all.sortedByDescending { it.background }
+            2 -> all.sortedByDescending { it.mobile }
+            else -> all
+        }.take(60)
 
-        val iconSize = Ui.dp(this, 38)
+        val total = all.sumOf { it.total }
+        val bg = all.sumOf { it.background }
+        status.text = "Toplam ${Fmt.bytes(total)} • arka planda ${Fmt.bytes(bg)} • dokun: ayrıntı"
+
+        val iconSize = Ui.dp(this, 40)
+        val list = Ui.card(this)
         rows.forEach { r ->
             val line = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, Ui.dp(this@AppsActivity, 8), 0, Ui.dp(this@AppsActivity, 8))
+                val v = Ui.dp(this@AppsActivity, 8)
+                setPadding(0, v, 0, v)
+                background = Ui.ripple(Ui.rounded(0, Ui.dp(this@AppsActivity, 12).toFloat()))
+                isClickable = true
+                setOnClickListener {
+                    startActivity(Intent(this@AppsActivity, AppDetailActivity::class.java).putExtra(AppDetailActivity.EXTRA_UID, r.uid))
+                }
             }
             val icon = ImageView(this).apply {
                 if (r.icon != null) setImageDrawable(r.icon) else setImageResource(android.R.drawable.sym_def_app_icon)
@@ -183,23 +124,26 @@ class AppsActivity : Activity() {
 
             val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             texts.addView(TextView(this).apply {
-                text = r.name
+                text = if (r.heavyUploader) "${r.name}  ⬆" else r.name
                 textSize = 15f
                 typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Ui.primary(this@AppsActivity))
             })
-            texts.addView(TextView(this).apply {
-                text = "Mobil ${Fmt.bytes(r.mobile)}  •  Wi-Fi ${Fmt.bytes(r.wifi)}"
-                textSize = 13f
-                alpha = 0.75f
-            })
+            texts.addView(Ui.text(this, "Mobil ${Fmt.bytes(r.mobile)} • Wi-Fi ${Fmt.bytes(r.wifi)}", 12f, color = Ui.secondary(this)))
+            texts.addView(Ui.text(this, "Ön plan ${Fmt.bytes(r.foreground)} • Arka plan ${Fmt.bytes(r.background)}", 12f, color = Ui.secondary(this)))
             line.addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-            line.addView(TextView(this).apply {
-                text = Fmt.bytes(r.total)
-                textSize = 15f
-                typeface = Typeface.DEFAULT_BOLD
-            })
-            content.addView(line)
+            val value = when (sort) {
+                1 -> r.background
+                2 -> r.mobile
+                else -> r.total
+            }
+            line.addView(Ui.text(this, Fmt.bytes(value), 15f, bold = true, color = Ui.ACCENT))
+            list.addView(line)
+        }
+        content.addView(list)
+        if (rows.any { it.heavyUploader }) {
+            content.addView(Ui.hint(this, "⬆ işaretli uygulamalar aldığından fazla veri gönderiyor (yedekleme, yükleme ya da görüntülü arama olabilir)."))
         }
     }
 }

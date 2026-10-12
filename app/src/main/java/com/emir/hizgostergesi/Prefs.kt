@@ -37,6 +37,12 @@ object Prefs {
     const val SB_BOLD = "cubuk_kalin"
     const val SB_HIDE_IDLE = "cubuk_bosta_gizle"
 
+    // Analiz bildirimleri
+    const val WEEKLY_ON = "haftalik_ozet"
+    const val WEEKLY_SENT = "haftalik_gonderilen"
+    const val ANOMALY_ON = "anormal_uyari"
+    const val ANOMALY_SENT = "anormal_gonderilen"
+
     // Pil
     const val INTERVAL_SEC = "aralik_sn"
     const val SLOW_WHEN_OFF = "ekran_kapali_yavas"
