@@ -37,6 +37,23 @@ object Prefs {
     const val SB_BOLD = "cubuk_kalin"
     const val SB_HIDE_IDLE = "cubuk_bosta_gizle"
 
+    // Bildirim paneli
+    const val N_LINE_SPEED = "bildirim_hiz"
+    const val N_LINE_PERIOD = "bildirim_donem"
+    const val N_LINE_TODAY = "bildirim_bugun"
+    const val N_LINE_PEAK = "bildirim_rekor"
+    const val N_LINE_MONTH = "bildirim_ay"
+    const val N_SIZE = "bildirim_boyut"
+    const val N_ARROWS = "bildirim_ok"
+    const val N_MONO = "bildirim_sabit_genislik"
+    const val N_BG = "bildirim_arka_plan"
+    const val N_BTN_OVERLAY = "bildirim_pencere_dugmesi"
+    const val N_BTN_RESET = "bildirim_sifirla_dugmesi"
+    const val N_LOCKSCREEN = "bildirim_kilit_ekrani"
+
+    // Uygulama bazlı sayım
+    const val APPS_RESET_AT = "uygulama_sifirlama"
+
     // Analiz bildirimleri
     const val WEEKLY_ON = "haftalik_ozet"
     const val WEEKLY_SENT = "haftalik_gonderilen"

@@ -252,6 +252,56 @@ class MainActivity : Activity() {
             addView(Ui.hint(this@MainActivity, "\"İkisi alt alta\"da üstteki indirme, alttaki yükleme. \"Boştayken gizle\" açıkken veri akmıyorsa simge boş kalır."))
         })
 
+        // ----- Bildirim paneli -----
+        root.addView(Ui.card(this, "Bildirim paneli").apply {
+            val ctx = this@MainActivity
+            addView(Ui.hint(ctx, "Bildirim kapalıyken ilk iki satır, aşağı çekince seçtiğin tüm satırlar görünür. Değişiklikler bir saniye içinde uygulanır."))
+            addView(Ui.label(ctx, "GÖRÜNECEK SATIRLAR"))
+            listOf(
+                Triple("Anlık hız", Prefs.N_LINE_SPEED, true),
+                Triple("Dönem kullanımı", Prefs.N_LINE_PERIOD, true),
+                Triple("Bugün: mobil / Wi-Fi", Prefs.N_LINE_TODAY, true),
+                Triple("Bugünün rekor hızı", Prefs.N_LINE_PEAK, false),
+                Triple("Bu ayın toplamı", Prefs.N_LINE_MONTH, false)
+            ).forEach { (label, key, def) ->
+                addView(Ui.switch(ctx, label, prefs.getBoolean(key, def)) { prefs.edit().putBoolean(key, it).apply() })
+            }
+            addView(Ui.label(ctx, "YAZI BOYUTU"))
+            addView(Ui.choiceRow(ctx, listOf("Küçük" to 0, "Normal" to 1, "Büyük" to 2), prefs.getInt(Prefs.N_SIZE, 1)) {
+                prefs.edit().putInt(Prefs.N_SIZE, it).apply()
+            })
+            addView(Ui.label(ctx, "OK STİLİ"))
+            addView(Ui.choiceRow(ctx, listOf("↓ ↑" to 0, "▼ ▲" to 1, "İnd. / Yük." to 2), prefs.getInt(Prefs.N_ARROWS, 0)) {
+                prefs.edit().putInt(Prefs.N_ARROWS, it).apply()
+            })
+            addView(Ui.switch(ctx, "Sabit genişlikli yazı (rakamlar kaymasın)", prefs.getBoolean(Prefs.N_MONO, false)) {
+                prefs.edit().putBoolean(Prefs.N_MONO, it).apply()
+            })
+            addView(Ui.label(ctx, "ARKA PLAN"))
+            addView(Ui.choiceRow(
+                ctx,
+                listOf(
+                    "Sistem" to 0, "Siyah" to 0xFF000000.toInt(), "Lacivert" to 0xFF1A237E.toInt(),
+                    "Mavi" to Ui.ACCENT, "Mor" to 0xFF4A148C.toInt(), "Yeşil" to 0xFF1B5E20.toInt(),
+                    "Kırmızı" to 0xFFB71C1C.toInt()
+                ),
+                prefs.getInt(Prefs.N_BG, 0)
+            ) {
+                prefs.edit().putInt(Prefs.N_BG, it).apply()
+            })
+            addView(Ui.hint(ctx, "Renkli arka planı her telefon desteklemeyebilir. Koyu arka planda açık bir yazı rengi seç."))
+            addView(Ui.label(ctx, "DÜĞMELER VE GİZLİLİK"))
+            addView(Ui.switch(ctx, "\"Pencereyi göster/gizle\" düğmesi", prefs.getBoolean(Prefs.N_BTN_OVERLAY, true)) {
+                prefs.edit().putBoolean(Prefs.N_BTN_OVERLAY, it).apply()
+            })
+            addView(Ui.switch(ctx, "\"Sayacı sıfırla\" düğmesi", prefs.getBoolean(Prefs.N_BTN_RESET, false)) {
+                prefs.edit().putBoolean(Prefs.N_BTN_RESET, it).apply()
+            })
+            addView(Ui.switch(ctx, "Kilit ekranında ayrıntıları göster", prefs.getBoolean(Prefs.N_LOCKSCREEN, true)) {
+                prefs.edit().putBoolean(Prefs.N_LOCKSCREEN, it).apply()
+            })
+        })
+
         // ----- Yüzen pencere -----
         root.addView(Ui.card(this, "Yüzen pencere").apply {
             overlaySwitch = Ui.switch(this@MainActivity, "Ekranda yüzen hız penceresi", prefs.getBoolean(Prefs.OVERLAY, false)) { checked ->

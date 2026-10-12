@@ -37,6 +37,9 @@ import android.view.WindowManager
 import android.widget.RemoteViews
 import android.widget.TextView
 import android.widget.Toast
+import android.text.SpannableString
+import android.text.style.TypefaceSpan
+import android.util.TypedValue
 import java.util.Calendar
 
 /**
@@ -109,7 +112,7 @@ class SpeedService : Service() {
         usedWifi = prefs.getLong(Prefs.USED_WIFI, 0L)
 
         val color = prefs.getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR)
-        enterForeground(build(0, 0, prefs.getBoolean(Prefs.UNIT_BITS, false), "Başlatılıyor…", "", "", color))
+        enterForeground(build(0, 0, prefs.getBoolean(Prefs.UNIT_BITS, false), listOf("Başlatılıyor…"), color))
 
         val filter = IntentFilter(Intent.ACTION_SCREEN_ON)
         if (Build.VERSION.SDK_INT >= 33) {
@@ -241,12 +244,27 @@ class SpeedService : Service() {
             val bits = prefs.getBoolean(Prefs.UNIT_BITS, false)
             val color = prefs.getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR)
             val scope = if (mobileOnly) "mobil" else "toplam"
-            val speedText = "↓ ${Fmt.speed(down, bits)}    ↑ ${Fmt.speed(up, bits)}"
+            val (arrowDown, arrowUp) = arrows()
+            val speedText = "$arrowDown ${Fmt.speed(down, bits)}    $arrowUp ${Fmt.speed(up, bits)}"
             val periodText = "Son $hours sa ($scope): ${Fmt.bytes(periodUsed)} • " +
                 "${Fmt.remaining(windowStart + periodMs - now)} sonra sıfırlanır"
             val todayText = "Bugün  Mobil ${Fmt.bytes(today.mobile)} • Wi-Fi ${Fmt.bytes(today.wifi)}"
 
-            val n = build(down, up, bits, speedText, periodText, todayText, color)
+            // Bildirimde hangi satırlar görünsün: kullanıcının seçimi
+            val lines = ArrayList<String>()
+            if (prefs.getBoolean(Prefs.N_LINE_SPEED, true)) lines += speedText
+            if (prefs.getBoolean(Prefs.N_LINE_PERIOD, true)) lines += periodText
+            if (prefs.getBoolean(Prefs.N_LINE_TODAY, true)) lines += todayText
+            if (prefs.getBoolean(Prefs.N_LINE_PEAK, false)) {
+                lines += "Bugünün rekoru  Mobil ${Fmt.speed(today.peakMobile, bits)} • Wi-Fi ${Fmt.speed(today.peakWifi, bits)}"
+            }
+            if (prefs.getBoolean(Prefs.N_LINE_MONTH, false)) {
+                val month = StatsStore.aggregate(this, StatsStore.key().take(7))
+                lines += "Bu ay  ${Fmt.bytes(month.mobile + month.wifi)} (mobil ${Fmt.bytes(month.mobile)})"
+            }
+            if (lines.isEmpty()) lines += speedText
+
+            val n = build(down, up, bits, lines, color)
             lastNotification = n
             nm.notify(NOTIF_ID, n)
             updateOverlay(down, up, bits, "$hours sa: ${Fmt.bytes(periodUsed)}", color)
@@ -282,47 +300,87 @@ class SpeedService : Service() {
         this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
     )
 
-    private fun build(
-        down: Long, up: Long, bits: Boolean, speedText: String, periodText: String, todayText: String, color: Int
-    ): Notification {
-        val small = RemoteViews(packageName, R.layout.notif).apply {
-            setTextViewText(R.id.speed, speedText)
-            setTextViewText(R.id.usage, periodText)
-            setTextColor(R.id.speed, color)
-            setTextColor(R.id.usage, color)
-        }
-        val big = RemoteViews(packageName, R.layout.notif_big).apply {
-            setTextViewText(R.id.speed, speedText)
-            setTextViewText(R.id.usage, periodText)
-            setTextViewText(R.id.today, todayText)
-            setTextColor(R.id.speed, color)
-            setTextColor(R.id.usage, color)
-            setTextColor(R.id.today, color)
+    private fun arrows(): Pair<String, String> = when (prefs.getInt(Prefs.N_ARROWS, 0)) {
+        1 -> "▼" to "▲"
+        2 -> "İnd." to "Yük."
+        else -> "↓" to "↑"
+    }
+
+    private fun build(down: Long, up: Long, bits: Boolean, lines: List<String>, color: Int): Notification {
+        val size = prefs.getInt(Prefs.N_SIZE, 1).coerceIn(0, 2)
+        val firstSp = floatArrayOf(13f, 15f, 18f)[size]
+        val otherSp = floatArrayOf(11f, 12.5f, 14.5f)[size]
+        val mono = prefs.getBoolean(Prefs.N_MONO, false)
+
+        fun styled(s: String): CharSequence =
+            if (!mono) s else SpannableString(s).apply { setSpan(TypefaceSpan("monospace"), 0, length, 0) }
+
+        fun fill(v: RemoteViews, ids: IntArray) {
+            ids.forEachIndexed { i, id ->
+                if (i < lines.size) {
+                    v.setViewVisibility(id, View.VISIBLE)
+                    v.setTextViewText(id, styled(lines[i]))
+                    v.setTextColor(id, color)
+                    v.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, if (i == 0) firstSp else otherSp)
+                } else {
+                    v.setViewVisibility(id, View.GONE)
+                }
+            }
         }
 
-        val overlayOn = prefs.getBoolean(Prefs.OVERLAY, false)
-        val toggle = PendingIntent.getForegroundService(
-            this, 1,
-            Intent(this, SpeedService::class.java).setAction(ACTION_TOGGLE_OVERLAY),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val action = Notification.Action.Builder(
-            Icon.createWithResource(this, android.R.drawable.ic_menu_view),
-            if (overlayOn) "Pencereyi gizle" else "Pencereyi göster",
-            toggle
-        ).build()
+        // Kapalıyken ilk iki satır, aşağı çekince hepsi
+        val small = RemoteViews(packageName, R.layout.notif).also { fill(it, intArrayOf(R.id.l1, R.id.l2)) }
+        val big = RemoteViews(packageName, R.layout.notif_big).also {
+            fill(it, intArrayOf(R.id.l1, R.id.l2, R.id.l3, R.id.l4, R.id.l5))
+        }
 
-        return Notification.Builder(this, CHANNEL_ID)
+        val builder = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(Icon.createWithBitmap(StatusIcon.draw(prefs, down, up, bits)))
             .setCustomContentView(small)
             .setCustomBigContentView(big)
             .setStyle(Notification.DecoratedCustomViewStyle())
-            .addAction(action)
             .setContentIntent(openApp())
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setVisibility(Notification.VISIBILITY_PUBLIC)
-            .build()
+            .setVisibility(
+                if (prefs.getBoolean(Prefs.N_LOCKSCREEN, true)) Notification.VISIBILITY_PUBLIC
+                else Notification.VISIBILITY_SECRET
+            )
+
+        // Renkli arka plan (telefon destekliyorsa bildirimin kendisi boyanır)
+        val bg = prefs.getInt(Prefs.N_BG, 0)
+        if (bg != 0) builder.setColorized(true).setColor(bg)
+
+        if (prefs.getBoolean(Prefs.N_BTN_OVERLAY, true)) {
+            val overlayOn = prefs.getBoolean(Prefs.OVERLAY, false)
+            val toggle = PendingIntent.getForegroundService(
+                this, 1,
+                Intent(this, SpeedService::class.java).setAction(ACTION_TOGGLE_OVERLAY),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            builder.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(this, android.R.drawable.ic_menu_view),
+                    if (overlayOn) "Pencereyi gizle" else "Pencereyi göster",
+                    toggle
+                ).build()
+            )
+        }
+        if (prefs.getBoolean(Prefs.N_BTN_RESET, false)) {
+            val reset = PendingIntent.getForegroundService(
+                this, 2,
+                Intent(this, SpeedService::class.java).setAction(ACTION_RESET),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            builder.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(this, android.R.drawable.ic_menu_revert),
+                    "Sayacı sıfırla",
+                    reset
+                ).build()
+            )
+        }
+        return builder.build()
     }
 
     // ---------- Widget ----------

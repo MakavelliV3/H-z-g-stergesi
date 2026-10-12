@@ -1,6 +1,8 @@
 package com.emir.hizgostergesi
 
 import android.app.Activity
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
@@ -9,13 +11,28 @@ import android.view.Gravity
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 /** Hangi uygulama ne kadar veri kullandı. "Kullanım erişimi" izni ister. Dokununca ayrıntı açılır. */
 class AppsActivity : Activity() {
 
     private lateinit var status: TextView
     private lateinit var content: LinearLayout
-    private var range = 0
+    private var range = 3 // varsayılan: bugün
+    private var customStart = 0L
+    private var customEnd = 0L
+    private lateinit var rangeHolder: LinearLayout
+    private lateinit var resetText: TextView
+    private val stamp = SimpleDateFormat("d MMM HH:mm", Locale("tr"))
+
+    private val ranges = listOf(
+        "1 sa" to 0, "3 sa" to 1, "12 sa" to 2, "Bugün" to 3, "Dün" to 4, "7 gün" to 5, "30 gün" to 6,
+        "Sayaç dönemi" to 7, "Sıfırlamadan beri" to 8, "Özel…" to 9
+    )
     private var sort = 0 // 0: toplam, 1: arka plan, 2: mobil
     private var loadId = 0
 
@@ -23,12 +40,23 @@ class AppsActivity : Activity() {
         super.onCreate(savedInstanceState)
         val (scroll, root) = Ui.page(this)
 
-        root.addView(Ui.choiceRow(
-            this, listOf("Bugün" to 0, "Bu dönem" to 1, "Son 7 gün" to 2, "Son 30 gün" to 3), range
-        ) {
-            range = it
-            load()
+        // Sıfırlama: Android'in kayıtları silinmez, o andan itibaren yeni sayım başlar
+        root.addView(Ui.card(this, "Sayım").apply {
+            resetText = Ui.hint(this@AppsActivity, "")
+            addView(resetText)
+            addView(Ui.button(this@AppsActivity, "Sayımı şimdi sıfırla") {
+                Prefs.get(this@AppsActivity).edit().putLong(Prefs.APPS_RESET_AT, System.currentTimeMillis()).apply()
+                range = 8
+                buildRange()
+                updateResetText()
+                load()
+                Toast.makeText(this@AppsActivity, "Sayım sıfırlandı, bundan sonrası sayılacak", Toast.LENGTH_SHORT).show()
+            })
         })
+        rangeHolder = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(rangeHolder)
+        buildRange()
+        updateResetText()
         root.addView(Ui.choiceRow(
             this, listOf("En çok toplam" to 0, "En çok arka plan" to 1, "En çok mobil" to 2), sort
         ) {
@@ -68,27 +96,100 @@ class AppsActivity : Activity() {
         val id = ++loadId
         status.text = "Yükleniyor…"
         val (start, end) = rangeMillis()
+        val label = rangeLabel(start, end)
         Thread {
             val rows = NetStats.queryApps(this, start, end)
-            runOnUiThread { if (id == loadId && !isFinishing) render(rows) }
+            runOnUiThread { if (id == loadId && !isFinishing) render(rows, label) }
         }.start()
+    }
+
+    private fun buildRange() {
+        rangeHolder.removeAllViews()
+        rangeHolder.addView(Ui.choiceRow(this, ranges, range) {
+            if (it == 9) {
+                pickCustom()
+            } else {
+                range = it
+                load()
+            }
+        })
+    }
+
+    private fun updateResetText() {
+        val at = Prefs.get(this).getLong(Prefs.APPS_RESET_AT, 0L)
+        resetText.text = if (at == 0L) {
+            "Hiç sıfırlanmadı. Sıfırlarsan \"Sıfırlamadan beri\" aralığı o andan itibaren sayar; Android'in kayıtları silinmez."
+        } else {
+            "Son sıfırlama: ${stamp.format(Date(at))}"
+        }
+    }
+
+    /** Özel aralık: önce başlangıç, sonra bitiş tarihi ve saati. */
+    private fun pickCustom() {
+        val now = System.currentTimeMillis()
+        val initialStart = if (customStart > 0) customStart else now - 86_400_000L
+        pickDateTime("Başlangıç", initialStart) { start ->
+            pickDateTime("Bitiş", if (customEnd > start) customEnd else now) { end ->
+                if (end <= start) {
+                    Toast.makeText(this, "Bitiş, başlangıçtan sonra olmalı", Toast.LENGTH_SHORT).show()
+                    buildRange()
+                } else {
+                    customStart = start
+                    customEnd = end
+                    range = 9
+                    buildRange()
+                    load()
+                }
+            }
+        }
+    }
+
+    private fun pickDateTime(title: String, initial: Long, done: (Long) -> Unit) {
+        val cal = Calendar.getInstance().apply { timeInMillis = initial }
+        DatePickerDialog(this, { _, y, m, d ->
+            TimePickerDialog(this, { _, h, min ->
+                cal.set(y, m, d, h, min, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                done(cal.timeInMillis)
+            }, cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), true).apply {
+                setTitle("$title saati")
+                setOnCancelListener { buildRange() }
+            }.show()
+        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).apply {
+            setTitle("$title tarihi")
+            setOnCancelListener { buildRange() }
+            datePicker.maxDate = System.currentTimeMillis()
+        }.show()
     }
 
     private fun rangeMillis(): Pair<Long, Long> {
         val now = System.currentTimeMillis()
-        val start = when (range) {
-            0 -> Insights.startOfToday()
-            1 -> Prefs.get(this).getLong(Prefs.WINDOW_START, now - 3_600_000L)
-            2 -> now - 7 * 86_400_000L
-            else -> now - 30 * 86_400_000L
+        val today = Insights.startOfToday()
+        val day = 86_400_000L
+        return when (range) {
+            0 -> now - 3_600_000L to now
+            1 -> now - 3 * 3_600_000L to now
+            2 -> now - 12 * 3_600_000L to now
+            4 -> today - day to today
+            5 -> now - 7 * day to now
+            6 -> now - 30 * day to now
+            7 -> Prefs.get(this).getLong(Prefs.WINDOW_START, now - 3_600_000L) to now
+            8 -> Prefs.get(this).getLong(Prefs.APPS_RESET_AT, 0L).let { if (it > 0) it else today } to now
+            9 -> customStart to customEnd
+            else -> today to now
         }
-        return start to now + 60_000L
     }
 
-    private fun render(all: List<AppUsage>) {
+    private fun rangeLabel(start: Long, end: Long): String = when (range) {
+        8 -> "Sıfırlamadan beri (${stamp.format(Date(start))})"
+        9 -> "${stamp.format(Date(start))} – ${stamp.format(Date(end))}"
+        else -> ranges.first { it.second == range }.first
+    }
+
+    private fun render(all: List<AppUsage>, label: String) {
         content.removeAllViews()
         if (all.isEmpty()) {
-            status.text = "Bu aralık için kayıt bulunamadı."
+            status.text = "Bu aralık için kayıt bulunamadı. (Android kayıtları birkaç saatlik dilimler hâlinde tutulur; çok kısa aralıklar boş görünebilir.)"
             return
         }
         val rows = when (sort) {
@@ -99,7 +200,7 @@ class AppsActivity : Activity() {
 
         val total = all.sumOf { it.total }
         val bg = all.sumOf { it.background }
-        status.text = "Toplam ${Fmt.bytes(total)} • arka planda ${Fmt.bytes(bg)} • dokun: ayrıntı"
+        status.text = "$label: toplam ${Fmt.bytes(total)} • arka planda ${Fmt.bytes(bg)}\nAyrıntı için bir uygulamaya dokun."
 
         val iconSize = Ui.dp(this, 40)
         val list = Ui.card(this)
