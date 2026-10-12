@@ -94,7 +94,7 @@ jobs:
       - name: Test APK'larını önceden derle
         id: devbuild
         continue-on-error: true
-        run: gradle assembleDebug assembleDebugAndroidTest --no-daemon 2>&1 | tee compile.log
+        run: gradle assembleDebug compileDebugAndroidTestKotlin assembleDebugAndroidTest --no-daemon 2>&1 | tee compile.log; test ${PIPESTATUS[0]} -eq 0
 
       - name: Android 14 emülatöründe uçtan uca test
         if: steps.devbuild.outcome == 'success'

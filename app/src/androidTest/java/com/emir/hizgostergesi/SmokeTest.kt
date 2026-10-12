@@ -32,7 +32,7 @@ class SmokeTest {
         inst.uiAutomation.executeShellCommand(cmd).close()
     }
 
-    private fun wait(ms: Long) = SystemClock.sleep(ms)
+    private fun pause(ms: Long) = SystemClock.sleep(ms)
 
     @Before
     fun setUp() {
@@ -40,13 +40,13 @@ class SmokeTest {
         shell("pm grant $pkg android.permission.READ_PHONE_STATE")
         shell("appops set $pkg GET_USAGE_STATS allow")
         shell("appops set $pkg SYSTEM_ALERT_WINDOW allow")
-        wait(300)
+        pause(300)
         Prefs.get(ctx).edit().putBoolean(Prefs.ONBOARDED, true).commit()
     }
 
     private fun startService() {
         ctx.startForegroundService(Intent(ctx, SpeedService::class.java))
-        wait(2500)
+        pause(2500)
     }
 
     @Test
@@ -63,46 +63,46 @@ class SmokeTest {
             repeat(2) {
                 for (tab in 0..4) {
                     sc.onActivity { it.select(tab) }
-                    wait(1600)
+                    pause(1600)
                 }
             }
             // Ana sayfaya geri tuşu ile dönüş
             sc.onActivity { it.select(MainActivity.TAB_SETTINGS) }
-            wait(500)
+            pause(500)
             sc.onActivity {
                 @Suppress("DEPRECATION")
                 it.onBackPressed()
             }
-            wait(800)
+            pause(800)
         }
     }
 
     @Test
     fun a03_openTabFromIntent() {
         val i = Intent(ctx, MainActivity::class.java).putExtra(MainActivity.EXTRA_TAB, MainActivity.TAB_ANALYSIS)
-        ActivityScenario.launch<MainActivity>(i).use { wait(2500) }
+        ActivityScenario.launch<MainActivity>(i).use { pause(2500) }
     }
 
     @Test
     fun a04_everySettingsCategoryOpens() {
         SettingsActivity.TITLES.keys.forEach { cat ->
             val i = Intent(ctx, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_CATEGORY, cat)
-            ActivityScenario.launch<SettingsActivity>(i).use { wait(700) }
+            ActivityScenario.launch<SettingsActivity>(i).use { pause(700) }
         }
         // Bilinmeyen kategori de çökmemeli
         val bad = Intent(ctx, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_CATEGORY, "yok-boyle-bir-sey")
-        ActivityScenario.launch<SettingsActivity>(bad).use { wait(500) }
+        ActivityScenario.launch<SettingsActivity>(bad).use { pause(500) }
     }
 
     @Test
     fun a05_onboardingAndRedirect() {
-        ActivityScenario.launch(OnboardingActivity::class.java).use { wait(1200) }
+        ActivityScenario.launch(OnboardingActivity::class.java).use { pause(1200) }
         Prefs.get(ctx).edit().putBoolean(Prefs.ONBOARDED, false).commit()
         // Ana pencere kurulum yapılmamışsa kendini kapatıp sihirbazı açmalı (kapanması hata değil)
         try {
-            ActivityScenario.launch(MainActivity::class.java).use { wait(1500) }
+            ActivityScenario.launch(MainActivity::class.java).use { pause(1500) }
         } catch (e: AssertionError) {
-            wait(1500)
+            pause(1500)
         }
         Prefs.get(ctx).edit().putBoolean(Prefs.ONBOARDED, true).commit()
     }
@@ -111,7 +111,7 @@ class SmokeTest {
     fun a06_appDetailForVariousUids() {
         listOf(Process.myUid(), 1000, 0, -4, -5, -1, 99999).forEach { uid ->
             val i = Intent(ctx, AppDetailActivity::class.java).putExtra(AppDetailActivity.EXTRA_UID, uid)
-            ActivityScenario.launch<AppDetailActivity>(i).use { wait(1500) }
+            ActivityScenario.launch<AppDetailActivity>(i).use { pause(1500) }
         }
     }
 
@@ -150,27 +150,27 @@ class SmokeTest {
             val allOff = i == 2
             listOf(Prefs.N_LINE_SPEED, Prefs.N_LINE_PERIOD, Prefs.N_LINE_TODAY).forEach { e.putBoolean(it, !allOff) }
             e.commit()
-            wait(2300)
+            pause(2300)
         }
         // Servis eylemleri
         listOf(SpeedService.ACTION_RESET, SpeedService.ACTION_RESET_ROLL, SpeedService.ACTION_TOGGLE_OVERLAY, SpeedService.ACTION_TOGGLE_OVERLAY)
             .forEach {
                 ctx.startForegroundService(Intent(ctx, SpeedService::class.java).setAction(it))
-                wait(1200)
+                pause(1200)
             }
         p.edit().clear().putBoolean(Prefs.ONBOARDED, true).commit()
-        wait(1500)
+        pause(1500)
     }
 
     @Test
     fun a09_overlayShowsAndHides() {
         startService()
         Prefs.get(ctx).edit().putBoolean(Prefs.OVERLAY, true).putInt(Prefs.OVERLAY_X, 99999).putInt(Prefs.OVERLAY_Y, -500).commit()
-        wait(3000)
+        pause(3000)
         Prefs.get(ctx).edit().putInt(Prefs.OVERLAY_SIZE, 24).putInt(Prefs.OVERLAY_ALPHA, 0).commit()
-        wait(2000)
+        pause(2000)
         Prefs.get(ctx).edit().putBoolean(Prefs.OVERLAY, false).commit()
-        wait(2000)
+        pause(2000)
     }
 
     @Test
@@ -190,19 +190,19 @@ class SmokeTest {
     @Test
     fun a11_darkModeAndMaterialYouOff() {
         shell("cmd uimode night yes")
-        wait(800)
+        pause(800)
         Prefs.get(ctx).edit().putBoolean(Prefs.DYNAMIC_COLOR, false).commit()
         Ui.init(ctx)
         ActivityScenario.launch(MainActivity::class.java).use { sc ->
             for (tab in 0..4) {
                 sc.onActivity { it.select(tab) }
-                wait(900)
+                pause(900)
             }
         }
         shell("cmd uimode night no")
         Prefs.get(ctx).edit().putBoolean(Prefs.DYNAMIC_COLOR, true).commit()
         Ui.init(ctx)
-        wait(500)
+        pause(500)
     }
 
     @Test
@@ -214,12 +214,12 @@ class SmokeTest {
         ActivityScenario.launch(MainActivity::class.java).use { sc ->
             for (tab in 0..4) {
                 sc.onActivity { it.select(tab) }
-                wait(1000)
+                pause(1000)
             }
         }
         ActivityScenario.launch<AppDetailActivity>(
             Intent(ctx, AppDetailActivity::class.java).putExtra(AppDetailActivity.EXTRA_UID, Process.myUid())
-        ).use { wait(800) }
+        ).use { pause(800) }
         Prefs.get(ctx).edit().putBoolean(Prefs.OVERLAY, false).commit()
         shell("appops set $pkg GET_USAGE_STATS allow")
         shell("appops set $pkg SYSTEM_ALERT_WINDOW allow")
@@ -229,11 +229,11 @@ class SmokeTest {
     fun a13_rotationKeepsWorking() {
         ActivityScenario.launch(MainActivity::class.java).use { sc ->
             sc.onActivity { it.select(MainActivity.TAB_STATS) }
-            wait(800)
+            pause(800)
             sc.onActivity { it.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
-            wait(1500)
+            pause(1500)
             sc.onActivity { it.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
-            wait(1500)
+            pause(1500)
         }
     }
 }
