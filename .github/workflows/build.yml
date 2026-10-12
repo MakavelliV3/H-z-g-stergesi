@@ -111,7 +111,7 @@ jobs:
             gradle connectedDebugAndroidTest --no-daemon --continue > device.log 2>&1 || echo "TESTLER_BASARISIZ" >> device.log
             adb logcat -d -v time > logcat-full.txt || true
             grep -E "AndroidRuntime|FATAL|hizgostergesi|ANR" logcat-full.txt | tail -n 600 > logcat.txt || true
-            adb pull /sdcard/Android/data/com.emir.hizgostergesi/files/shots shots || true
+            adb pull /data/local/tmp/shots shots || true
 
       - name: Cihaz testi raporunu yayınla
         if: always()

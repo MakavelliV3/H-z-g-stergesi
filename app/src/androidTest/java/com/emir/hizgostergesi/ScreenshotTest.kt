@@ -27,13 +27,21 @@ class ScreenshotTest {
     private val pkg = ctx.packageName
     private val dir = File(ctx.getExternalFilesDir(null), "shots").apply { mkdirs() }
 
-    private fun shell(cmd: String) = inst.uiAutomation.executeShellCommand(cmd).close()
+    /** Kabuk komutunu çalıştırır ve bitmesini bekler. */
+    private fun shell(cmd: String) {
+        val pfd = inst.uiAutomation.executeShellCommand(cmd)
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(pfd).use { it.readBytes() }
+    }
     private fun pause(ms: Long) = SystemClock.sleep(ms)
 
     private fun shot(name: String) {
         pause(900)
         val bmp: Bitmap = inst.uiAutomation.takeScreenshot() ?: return
-        FileOutputStream(File(dir, "$name.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val f = File(dir, "$name.png")
+        FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // Testten sonra uygulama kaldırılınca bu klasör silinir; kabuğun klasörüne kopyala
+        shell("mkdir -p /data/local/tmp/shots")
+        shell("cp ${f.absolutePath} /data/local/tmp/shots/")
     }
 
     /** Grafikler dolu görünsün diye son 40 güne gerçekçi örnek veri yazar. */

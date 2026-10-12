@@ -28,8 +28,10 @@ class SmokeTest {
     private val ctx: Context = inst.targetContext
     private val pkg = ctx.packageName
 
+    /** Kabuk komutunu çalıştırır ve bitmesini bekler. */
     private fun shell(cmd: String) {
-        inst.uiAutomation.executeShellCommand(cmd).close()
+        val pfd = inst.uiAutomation.executeShellCommand(cmd)
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(pfd).use { it.readBytes() }
     }
 
     private fun pause(ms: Long) = SystemClock.sleep(ms)
