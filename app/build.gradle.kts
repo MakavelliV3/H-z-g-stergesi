@@ -11,8 +11,8 @@ android {
         applicationId = "com.emir.hizgostergesi"
         minSdk = 29
         targetSdk = 35
-        versionCode = 7
-        versionName = "2.0"
+        versionCode = 8
+        versionName = "2.1"
     }
 
     // Sabit anahtar: her derleme aynı imzayla çıkar, güncellemeler eskisinin üstüne kurulur

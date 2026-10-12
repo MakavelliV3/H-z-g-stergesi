@@ -200,6 +200,7 @@ class SettingsActivity : Activity() {
             addView(Ui.label(ctx, "Görünecek satırlar"))
             listOf(
                 Triple("Anlık hız", Prefs.N_LINE_SPEED, true),
+                Triple("Son 1 saatin toplamı (kayan)", Prefs.N_LINE_HOUR, true),
                 Triple("Dönem kullanımı", Prefs.N_LINE_PERIOD, true),
                 Triple("Bugün: mobil / Wi-Fi", Prefs.N_LINE_TODAY, true),
                 Triple("Bugünün rekor hızı", Prefs.N_LINE_PEAK, false),

@@ -39,6 +39,8 @@ object Prefs {
 
     // Bildirim paneli
     const val N_LINE_SPEED = "bildirim_hiz"
+    const val N_LINE_HOUR = "bildirim_son_saat"
+    const val HOUR_BUCKETS = "son_saat_dakikalar"
     const val N_LINE_PERIOD = "bildirim_donem"
     const val N_LINE_TODAY = "bildirim_bugun"
     const val N_LINE_PEAK = "bildirim_rekor"

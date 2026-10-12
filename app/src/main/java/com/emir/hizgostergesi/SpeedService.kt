@@ -67,6 +67,12 @@ class SpeedService : Service() {
     private var lastInteractive = true
     private var ticks = 0L
 
+    // Kayan "son 1 saat": dakika dakika 60 kova (toplam ve mobil)
+    private val hourTotal = LongArray(60)
+    private val hourMobile = LongArray(60)
+    private var bucketMinute = 0L
+    private var lastHourSave = 0L
+
     private var usedMobile = 0L
     private var usedWifi = 0L
     private var windowStart = 0L
@@ -111,6 +117,7 @@ class SpeedService : Service() {
         windowStart = prefs.getLong(Prefs.WINDOW_START, 0L).takeIf { it > 0 } ?: System.currentTimeMillis()
         usedMobile = prefs.getLong(Prefs.USED_MOBILE, 0L)
         usedWifi = prefs.getLong(Prefs.USED_WIFI, 0L)
+        loadHour()
 
         val color = prefs.getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR)
         enterForeground(build(0, 0, prefs.getBoolean(Prefs.UNIT_BITS, false), listOf("Başlatılıyor…"), color))
@@ -153,6 +160,7 @@ class SpeedService : Service() {
         }
         removeOverlay()
         ConnInfo.stop(this)
+        saveHour()
         saveCounters()
         StatsStore.save(this, force = true)
         super.onDestroy()
@@ -242,6 +250,11 @@ class SpeedService : Service() {
         usedMobile += dMobRx + dMobTx
         usedWifi += dWifiRx + dWifiTx
         saveCounters()
+        addToHour(now, dTotRx + dTotTx, dMobRx + dMobTx)
+        if (nowEl - lastHourSave > 30_000L) {
+            lastHourSave = nowEl
+            saveHour()
+        }
 
         val mobileOnly = prefs.getBoolean(Prefs.MOBILE_ONLY, false)
         val periodUsed = if (mobileOnly) usedMobile else usedMobile + usedWifi
@@ -263,6 +276,9 @@ class SpeedService : Service() {
             // Bildirimde hangi satırlar görünsün: kullanıcının seçimi
             val lines = ArrayList<String>()
             if (prefs.getBoolean(Prefs.N_LINE_SPEED, true)) lines += speedText
+            if (prefs.getBoolean(Prefs.N_LINE_HOUR, true)) {
+                lines += "Son 1 saat: ${Fmt.bytes(lastHourTotal)}  (mobil ${Fmt.bytes(lastHourMobile)})"
+            }
             if (prefs.getBoolean(Prefs.N_LINE_PERIOD, true)) lines += periodText
             if (prefs.getBoolean(Prefs.N_LINE_TODAY, true)) lines += todayText
             if (prefs.getBoolean(Prefs.N_LINE_PEAK, false)) {
@@ -283,6 +299,58 @@ class SpeedService : Service() {
 
         val interval = prefs.getInt(Prefs.INTERVAL_SEC, 1).coerceIn(1, 10) * 1000L
         handler.postDelayed(tick, if (slow) 15_000L else interval)
+    }
+
+    // ---------- Kayan son 1 saat ----------
+
+    /** Kovaları şimdiki dakikaya kadar ilerletir; aradaki boş dakikaları sıfırlar. */
+    private fun advanceTo(minute: Long) {
+        if (bucketMinute == 0L || minute - bucketMinute >= 60 || minute < bucketMinute) {
+            hourTotal.fill(0)
+            hourMobile.fill(0)
+            bucketMinute = minute
+            return
+        }
+        while (bucketMinute < minute) {
+            bucketMinute++
+            val i = (bucketMinute % 60).toInt()
+            hourTotal[i] = 0
+            hourMobile[i] = 0
+        }
+    }
+
+    private fun addToHour(nowMs: Long, total: Long, mobile: Long) {
+        advanceTo(nowMs / 60_000L)
+        val i = (bucketMinute % 60).toInt()
+        hourTotal[i] += total
+        hourMobile[i] += mobile
+        lastHourTotal = hourTotal.sum()
+        lastHourMobile = hourMobile.sum()
+    }
+
+    private fun saveHour() {
+        prefs.edit().putString(
+            Prefs.HOUR_BUCKETS,
+            "$bucketMinute|${hourTotal.joinToString(",")}|${hourMobile.joinToString(",")}"
+        ).apply()
+    }
+
+    private fun loadHour() {
+        try {
+            val parts = (prefs.getString(Prefs.HOUR_BUCKETS, "") ?: "").split("|")
+            if (parts.size != 3) return
+            bucketMinute = parts[0].toLong()
+            parts[1].split(",").forEachIndexed { i, v -> if (i < 60) hourTotal[i] = v.toLong() }
+            parts[2].split(",").forEachIndexed { i, v -> if (i < 60) hourMobile[i] = v.toLong() }
+            // Servis kapalıyken geçen dakikaları boşalt
+            advanceTo(System.currentTimeMillis() / 60_000L)
+            lastHourTotal = hourTotal.sum()
+            lastHourMobile = hourMobile.sum()
+        } catch (e: Exception) {
+            hourTotal.fill(0)
+            hourMobile.fill(0)
+            bucketMinute = 0L
+        }
     }
 
     // ---------- Veri sınırı ----------
@@ -534,6 +602,13 @@ class SpeedService : Service() {
         /** Eskiden yeniye son ölçümler. */
         @Synchronized
         fun recent(): LongArray = LongArray(ring.size) { ring[(ringPos + it) % ring.size] }
+
+        /** Kayan son 1 saatin toplamı (ana ekran için). */
+        @Volatile
+        var lastHourTotal = 0L
+
+        @Volatile
+        var lastHourMobile = 0L
 
         /** Ana ekrandaki canlı hız kartı için son ölçülen hızlar. */
         @Volatile
