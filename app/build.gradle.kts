@@ -13,6 +13,7 @@ android {
         targetSdk = 35
         versionCode = 12
         versionName = "3.0-beta2"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // Sabit anahtar: her derleme aynı imzayla çıkar, güncellemeler eskisinin üstüne kurulur
@@ -67,4 +68,10 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Android'in org.json'u birim testlerinde boş taslaktır; gerçek uygulamayı kullan
     testImplementation("org.json:json:20240303")
+
+    // Emülatörde çalışan uçtan uca testler
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

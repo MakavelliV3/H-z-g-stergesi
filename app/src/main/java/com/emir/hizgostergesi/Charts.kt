@@ -138,7 +138,7 @@ class SpeedGauge(c: Context) : View(c) {
         text.typeface = Typeface.DEFAULT
         val labels = if (bits) listOf("1K", "10K", "100K", "1M", "10M", "100M", "1G") else listOf("1K", "10K", "100K", "1M", "10M", "100M")
         labels.forEachIndexed { i, l ->
-            val f = i.toFloat() / (if (bits) 6 else 5.097f)
+            val f = i.toFloat() / (if (bits) 6f else 5.097f)
             if (f > 1f) return@forEachIndexed
             val a = Math.toRadians((start + sweep * f).toDouble())
             val r = size / 2 - stroke * 1.6f

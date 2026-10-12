@@ -69,3 +69,57 @@ jobs:
           gh release delete build-log -y --cleanup-tag || true
           gh release create build-log build.log --prerelease \
             --title "Derleme hatası" --notes "Son başarısız derlemenin kaydı"
+
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: KVM'yi aç
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Test APK'larını önceden derle
+        run: gradle assembleDebug assembleDebugAndroidTest --no-daemon
+
+      - name: Android 14 emülatöründe uçtan uca test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            adb logcat -c || true
+            gradle connectedDebugAndroidTest --no-daemon --continue > device.log 2>&1 || echo "TESTLER_BASARISIZ" >> device.log
+            adb logcat -d -v time > logcat-full.txt || true
+            grep -E "AndroidRuntime|FATAL|hizgostergesi|ANR" logcat-full.txt | tail -n 600 > logcat.txt || true
+
+      - name: Cihaz testi raporunu yayınla
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p cihaz
+          cp device.log cihaz/device.log 2>/dev/null || echo "kayıt yok" > cihaz/device.log
+          cp logcat.txt cihaz/logcat.txt 2>/dev/null || echo "logcat yok" > cihaz/logcat.txt
+          cat app/build/outputs/androidTest-results/connected/debug/*.xml > cihaz/device-tests.xml 2>/dev/null \
+            || find app/build -name "TEST-*.xml" -path "*androidTest*" -exec cat {} + > cihaz/device-tests.xml 2>/dev/null \
+            || echo "sonuç yok" > cihaz/device-tests.xml
+          gh release delete device-tests -y --cleanup-tag || true
+          gh release create device-tests cihaz/device.log cihaz/logcat.txt cihaz/device-tests.xml --prerelease \
+            --title "Emülatör testleri" --notes "Android 14 emülatöründe uçtan uca test sonuçları"
