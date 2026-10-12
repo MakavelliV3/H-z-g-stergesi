@@ -42,6 +42,7 @@ object Ui {
 
     /** Uygulama açılışında ve tema değişince çağrılır. */
     fun init(c: Context) {
+        Fmt.base = if (Prefs.get(c).getInt(Prefs.UNIT_BASE, 1000) == 1024) 1024L else 1000L
         dynamic = Build.VERSION.SDK_INT >= 31 && Prefs.get(c).getBoolean(Prefs.DYNAMIC_COLOR, true)
         if (dynamic && Build.VERSION.SDK_INT >= 31) {
             ACCENT = c.getColor(android.R.color.system_accent1_600)

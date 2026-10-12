@@ -56,18 +56,7 @@ object Insights {
     /** Bir aralığın toplamı: izin varsa Android kayıtlarından, yoksa uygulamanın kendi kayıtlarından. */
     fun total(c: Context, start: Long, end: Long): Pair<Long, Long> {
         if (NetStats.hasAccess(c)) return NetStats.deviceTotal(c, start, end)
-        var m = 0L
-        var w = 0L
-        val all = StatsStore.all(c)
-        val cal = Calendar.getInstance().apply { timeInMillis = start }
-        while (cal.timeInMillis < end) {
-            all[StatsStore.key(cal.timeInMillis)]?.let {
-                m += it.mobile
-                w += it.wifi
-            }
-            cal.add(Calendar.DAY_OF_MONTH, 1)
-        }
-        return m to w
+        return StatsStore.sumRange(c, start, end)
     }
 
     fun percentChange(now: Long, before: Long): String {
@@ -164,7 +153,7 @@ object Insights {
             .associateBy { it.uid }
         for ((uid, mb) in limits) {
             val app = today[uid] ?: continue
-            if (app.total < mb * 1048576L || sentToday.contains(uid.toString())) continue
+            if (app.total < Fmt.mbToBytes(mb) || sentToday.contains(uid.toString())) continue
             sentToday += uid.toString()
             NetStats.describe(c, app)
             notify(

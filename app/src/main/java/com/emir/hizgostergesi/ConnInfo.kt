@@ -27,6 +27,13 @@ object ConnInfo {
 
     val CELL_KINDS = setOf("5G", "4.5G", "4G", "3G", "2G", "Mobil")
 
+    /** VPN açık mı, asıl hat mobil mi? (VPN'li trafiğin çift sayılmaması için) */
+    @Volatile
+    var vpn = false
+
+    @Volatile
+    var cellular = false
+
     private var cellType = 0
     private var cellOverride = 0
     private var netCallback: ConnectivityManager.NetworkCallback? = null
@@ -99,6 +106,8 @@ object ConnInfo {
         } catch (e: Exception) {
             label = ""
             kind = ""
+            vpn = false
+            cellular = false
         }
     }
 
@@ -106,8 +115,13 @@ object ConnInfo {
         if (caps == null) {
             label = ""
             kind = ""
+            vpn = false
+            cellular = false
             return
         }
+        vpn = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+        cellular = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
+            !caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
         var l: String
         val k: String
         when {

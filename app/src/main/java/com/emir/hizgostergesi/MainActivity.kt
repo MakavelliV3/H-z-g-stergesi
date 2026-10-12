@@ -222,7 +222,7 @@ class MainActivity : Activity() {
         tilePeriod.value.text = Fmt.bytes(used)
         val quotaMb = prefs.getInt(Prefs.QUOTA_MB, 0)
         if (quotaMb > 0) {
-            val ratio = used.toDouble() / (quotaMb * 1048576.0)
+            val ratio = used.toDouble() / Fmt.mbToBytes(quotaMb)
             quotaBar.visibility = View.VISIBLE
             quotaBar.progress = (ratio * 1000).toInt().coerceIn(0, 1000)
             quotaBar.progressTintList = ColorStateList.valueOf(if (ratio >= 1) 0xFFE53935.toInt() else Ui.ACCENT)

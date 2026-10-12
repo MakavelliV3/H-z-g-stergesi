@@ -10,6 +10,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import java.util.TreeMap
 
 /** Bir bağlantı türündeki kullanım ve hız ölçümleri. */
@@ -201,8 +202,13 @@ object StatsStore {
     private var lastSave = 0L
     private val keyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
+    /** Gün anahtarı (yyyy-MM-dd). Saat dilimi değişirse hemen uyum sağlar. */
     @Synchronized
-    fun key(time: Long = System.currentTimeMillis()): String = keyFormat.format(Date(time))
+    fun key(time: Long = System.currentTimeMillis()): String {
+        val tz = TimeZone.getDefault()
+        if (keyFormat.timeZone != tz) keyFormat.timeZone = tz
+        return keyFormat.format(Date(time))
+    }
 
     @Synchronized
     fun all(c: Context): TreeMap<String, DayStats> {
@@ -254,6 +260,28 @@ object StatsStore {
 
     @Synchronized
     fun today(c: Context): DayStats = all(c).getOrPut(key()) { DayStats() }
+
+    /** Verilen andaki günün kaydı (gece yarısını aşan ölçümleri doğru güne yazmak için). */
+    @Synchronized
+    fun dayAt(c: Context, time: Long): DayStats = all(c).getOrPut(key(time)) { DayStats() }
+
+    /** [start, end) aralığındaki günlerin (mobil, Wi-Fi) toplamı; başka thread'den güvenle çağrılır. */
+    @Synchronized
+    fun sumRange(c: Context, start: Long, end: Long): Pair<Long, Long> {
+        val days = all(c)
+        var m = 0L
+        var w = 0L
+        val cal = Calendar.getInstance().apply { timeInMillis = start }
+        var guard = 0
+        while (cal.timeInMillis < end && guard++ < 800) {
+            days[key(cal.timeInMillis)]?.let {
+                m += it.mobile
+                w += it.wifi
+            }
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return m to w
+    }
 
     @Synchronized
     fun save(c: Context, force: Boolean = false) {

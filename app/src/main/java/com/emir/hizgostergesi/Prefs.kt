@@ -3,6 +3,7 @@ package com.emir.hizgostergesi
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
+import java.util.Locale
 
 /** Ayar anahtarları: ayar ekranı yazar, servis her turda okur. */
 object Prefs {
@@ -72,6 +73,8 @@ object Prefs {
 
     // Genel
     const val DYNAMIC_COLOR = "material_you"
+    const val UNIT_BASE = "birim_tabani"   // 1000 ya da 1024
+    const val WIDGET_SEC = "widget_aralik_sn"
     const val ONBOARDED = "kurulum_tamam"
 
     // Analiz bildirimleri
@@ -90,11 +93,14 @@ object Prefs {
     fun get(c: Context): SharedPreferences = c.getSharedPreferences(NAME, Context.MODE_PRIVATE)
 
     /** Uygulama başına günlük sınırlar (uid -> MB). "uid=mb;uid=mb" olarak saklanır. */
-    fun appLimits(c: Context): Map<Int, Int> =
-        (get(c).getString(APP_LIMITS, "") ?: "").split(";").mapNotNull {
+    fun appLimits(c: Context): Map<Int, Int> = parseLimits(get(c).getString(APP_LIMITS, ""))
+
+    /** "uid=mb;uid=mb" biçimini çözer; bozuk parçaları atlar. */
+    fun parseLimits(s: String?): Map<Int, Int> =
+        (s ?: "").split(";").mapNotNull {
             val parts = it.split("=")
-            val uid = parts.getOrNull(0)?.toIntOrNull()
-            val mb = parts.getOrNull(1)?.toIntOrNull()
+            val uid = parts.getOrNull(0)?.trim()?.toIntOrNull()
+            val mb = parts.getOrNull(1)?.trim()?.toIntOrNull()
             if (uid != null && mb != null && mb > 0) uid to mb else null
         }.toMap()
 
@@ -107,35 +113,61 @@ object Prefs {
 
 /** Sayı biçimlendirme yardımcıları. */
 object Fmt {
-    fun bytes(b: Long): String = when {
-        b >= 1L shl 30 -> "%.2f GB".format(b / 1073741824.0)
-        b >= 1L shl 20 -> "%.1f MB".format(b / 1048576.0)
-        b >= 1L shl 10 -> "${b / 1024} KB"
-        else -> "$b B"
+    private val TR = Locale("tr", "TR")
+
+    /**
+     * Birim tabanı: 1000 (Android'in kendi veri ekranı ve operatörler gibi) ya da 1024.
+     * Uygulama açılışında ve ayar değişince Prefs'ten güncellenir.
+     */
+    @Volatile
+    var base = 1000L
+
+    private fun f(pattern: String, v: Double) = String.format(TR, pattern, v)
+
+    /** Kota/sınır seçenekleri MB cinsinden saklanır; bayta çevirir. */
+    fun mbToBytes(mb: Int): Long =
+        if (mb >= 1024 && mb % 1024 == 0) (mb / 1024) * base * base * base else mb * base * base
+
+    fun bytes(b: Long): String {
+        val k = base.toDouble()
+        return when {
+            b >= base * base * base -> {
+                val g = b / (k * k * k)
+                f(if (g >= 10) "%.1f GB" else "%.2f GB", g)
+            }
+            b >= base * base -> {
+                val m = b / (k * k)
+                f(if (m >= 100) "%.0f MB" else "%.1f MB", m)
+            }
+            b >= base -> "${b / base} KB"
+            else -> "${b.coerceAtLeast(0)} B"
+        }
     }
 
     fun mb(mb: Int): String = when {
-        mb >= 1024 && mb % 1024 == 0 -> "${mb / 1024} GB"
-        mb >= 1024 -> "%.1f GB".format(mb / 1024.0)
+        mb >= 1000 && mb % 1024 == 0 -> "${mb / 1024} GB"
+        mb >= 1000 && mb % 1000 == 0 -> "${mb / 1000} GB"
+        mb >= 1000 -> f("%.1f GB", mb / 1024.0)
         else -> "$mb MB"
     }
 
-    /** Hızı "sayı" + "birim" olarak ayırır. bits=true ise Mbps/Kbps kullanır. */
+    /** Hızı "sayı" + "birim" olarak ayırır. bits=true ise Mbps/Kbps kullanır (bit hızı hep 1000 tabanlıdır). */
     fun speedParts(bytesPerSec: Long, bits: Boolean): Pair<String, String> {
+        val v = bytesPerSec.coerceAtLeast(0)
         if (bits) {
-            val b = bytesPerSec * 8
-            return if (b >= 1_000_000) {
-                val m = b / 1_000_000.0
-                (if (m >= 10) "%.0f".format(m) else "%.1f".format(m)) to "Mbps"
-            } else {
-                (b / 1000).toString() to "Kbps"
+            val b = v * 8
+            return when {
+                b >= 1_000_000_000 -> f(if (b >= 10_000_000_000) "%.0f" else "%.1f", b / 1e9) to "Gbps"
+                b >= 1_000_000 -> f(if (b >= 10_000_000) "%.0f" else "%.1f", b / 1e6) to "Mbps"
+                else -> (b / 1000).toString() to "Kbps"
             }
         }
-        return if (bytesPerSec >= 1024L * 1024L) {
-            val m = bytesPerSec / 1048576.0
-            (if (m >= 10) "%.0f".format(m) else "%.1f".format(m)) to "MB/s"
+        val k = base.toDouble()
+        return if (v >= base * base) {
+            val m = v / (k * k)
+            f(if (m >= 10) "%.0f" else "%.1f", m) to "MB/s"
         } else {
-            (bytesPerSec / 1024).toString() to "KB/s"
+            (v / base).toString() to "KB/s"
         }
     }
 

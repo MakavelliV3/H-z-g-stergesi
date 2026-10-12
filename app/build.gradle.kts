@@ -11,8 +11,8 @@ android {
         applicationId = "com.emir.hizgostergesi"
         minSdk = 29
         targetSdk = 35
-        versionCode = 10
-        versionName = "2.3"
+        versionCode = 11
+        versionName = "3.0-beta1"
     }
 
     // Sabit anahtar: her derleme aynı imzayla çıkar, güncellemeler eskisinin üstüne kurulur
@@ -44,6 +44,13 @@ android {
     lint {
         checkReleaseBuilds = false
         abortOnError = false
+        textReport = true
+        htmlReport = false
+        xmlReport = false
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     compileOptions {
@@ -54,4 +61,10 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    // Android'in org.json'u birim testlerinde boş taslaktır; gerçek uygulamayı kullan
+    testImplementation("org.json:json:20240303")
 }

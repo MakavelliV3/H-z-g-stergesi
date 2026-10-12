@@ -107,7 +107,7 @@ class AppDetailActivity : Activity() {
             renderLimit(uid, today)
         })
         if (current > 0) {
-            val ratio = today.toDouble() / (current * 1048576.0)
+            val ratio = today.toDouble() / Fmt.mbToBytes(current)
             limitBox.addView(Ui.text(this, "Bugün ${Fmt.bytes(today)} / ${Fmt.mb(current)}", 15f, topDp = 8).apply { typeface = Ui.MEDIUM })
             limitBox.addView(PercentBar(this, ratio.toFloat(), if (ratio >= 1) 0xFFE53935.toInt() else Ui.ACCENT),
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 8)).apply { topMargin = Ui.dp(this@AppDetailActivity, 4) })

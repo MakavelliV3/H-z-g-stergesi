@@ -22,6 +22,31 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
+      - name: Birim testleri ve lint
+        id: tests
+        continue-on-error: true
+        run: gradle testDebugUnitTest lintDebug --no-daemon --continue 2>&1 | tee test.log
+
+      - name: Raporları yayınla
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p rapor
+          cp test.log rapor/test.log || true
+          cp app/build/reports/lint-results-debug.txt rapor/lint.txt || echo "lint raporu yok" > rapor/lint.txt
+          cat app/build/test-results/testDebugUnitTest/*.xml > rapor/unit-tests.xml 2>/dev/null || echo "test sonucu yok" > rapor/unit-tests.xml
+          gh release delete reports -y --cleanup-tag || true
+          gh release create reports rapor/test.log rapor/lint.txt rapor/unit-tests.xml --prerelease \
+            --title "Test ve lint raporları" --notes "Son derlemenin birim testi ve lint raporları"
+
+      - name: Testler geçti mi?
+        if: steps.tests.outcome == 'failure'
+        run: |
+          echo "Birim testleri ya da derleme başarısız" | tee build.log
+          tail -80 test.log >> build.log
+          exit 1
+
       - name: APK derle
         run: gradle assembleRelease --no-daemon 2>&1 | tee build.log
 

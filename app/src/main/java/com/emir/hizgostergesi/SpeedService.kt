@@ -57,20 +57,15 @@ class SpeedService : Service() {
     private lateinit var power: PowerManager
     private lateinit var prefs: SharedPreferences
 
-    private var lastTotRx = 0L
-    private var lastTotTx = 0L
-    private var lastMobRx = 0L
-    private var lastMobTx = 0L
+    private var last = Counters(0, 0, 0, 0)
     private var lastTickAt = 0L
     private var lastWidgetAt = 0L
     private var lastInsightsAt = -1L
     private var lastInteractive = true
     private var ticks = 0L
 
-    // Kayan "son X saat": dakika dakika 24 saatlik kova (toplam ve mobil)
-    private val hourTotal = LongArray(ROLL_MIN)
-    private val hourMobile = LongArray(ROLL_MIN)
-    private var bucketMinute = 0L
+    // Kayan "son X saat": dakika dakika 24 saatlik kova
+    private val roller = RollingCounter(ROLL_MIN)
     private var lastHourSave = 0L
 
     private var usedMobile = 0L
@@ -107,10 +102,7 @@ class SpeedService : Service() {
             NotificationChannel(WARN_CHANNEL_ID, "Veri sınırı uyarısı", NotificationManager.IMPORTANCE_HIGH)
         )
 
-        lastTotRx = pos(TrafficStats.getTotalRxBytes())
-        lastTotTx = pos(TrafficStats.getTotalTxBytes())
-        lastMobRx = pos(TrafficStats.getMobileRxBytes())
-        lastMobTx = pos(TrafficStats.getMobileTxBytes())
+        last = readCounters()
         lastTickAt = SystemClock.elapsedRealtime()
         lastInteractive = power.isInteractive
 
@@ -177,7 +169,10 @@ class SpeedService : Service() {
         }
     }
 
-    private fun pos(v: Long) = if (v < 0) 0L else v
+    private fun readCounters() = TrafficMath.read(
+        TrafficStats.getTotalRxBytes(), TrafficStats.getTotalTxBytes(),
+        TrafficStats.getMobileRxBytes(), TrafficStats.getMobileTxBytes()
+    )
 
     private fun resetWindow(now: Long) {
         windowStart = now
@@ -199,31 +194,30 @@ class SpeedService : Service() {
         val dt = (nowEl - lastTickAt).coerceAtLeast(250) / 1000.0
         lastTickAt = nowEl
 
-        // Sayaçları oku; Wi-Fi = toplam - mobil
-        val totRx = pos(TrafficStats.getTotalRxBytes())
-        val totTx = pos(TrafficStats.getTotalTxBytes())
-        val mobRx = pos(TrafficStats.getMobileRxBytes())
-        val mobTx = pos(TrafficStats.getMobileTxBytes())
-        val dTotRx = (totRx - lastTotRx).coerceAtLeast(0)
-        val dTotTx = (totTx - lastTotTx).coerceAtLeast(0)
-        val dMobRx = (mobRx - lastMobRx).coerceAtLeast(0)
-        val dMobTx = (mobTx - lastMobTx).coerceAtLeast(0)
-        val dWifiRx = (dTotRx - dMobRx).coerceAtLeast(0)
-        val dWifiTx = (dTotTx - dMobTx).coerceAtLeast(0)
-        lastTotRx = totRx
-        lastTotTx = totTx
-        lastMobRx = mobRx
-        lastMobTx = mobTx
+        // Sayaçları oku ve farkı hesapla (sıçrama koruması ve VPN düzeltmesiyle; bkz. TrafficMath)
+        val cur = readCounters()
+        val mobileMoving = TrafficMath.diff(last.mobRx, cur.mobRx, dt) + TrafficMath.diff(last.mobTx, cur.mobTx, dt) > 0
+        val onCellular = ConnInfo.cellular || (ConnInfo.kind !in setOf("Wi-Fi", "Ethernet") && mobileMoving)
+        val delta = TrafficMath.delta(last, cur, dt, ConnInfo.vpn, onCellular)
+        last = cur
+        val dMobRx = delta.mobRx
+        val dMobTx = delta.mobTx
+        val dWifiRx = delta.wifiRx
+        val dWifiTx = delta.wifiTx
+        val dTotRx = delta.rx
+        val dTotTx = delta.tx
 
-        val down = (dTotRx / dt).toLong()
-        val up = (dTotTx / dt).toLong()
+        val down = TrafficMath.rate(dTotRx, dt)
+        val up = TrafficMath.rate(dTotTx, dt)
         lastDown = down
         lastUp = up
         pushSample(down)
 
-        // Günlük istatistik (saat saat ve ekran durumuyla birlikte)
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        val today = StatsStore.today(this)
+        // Günlük istatistik (saat saat ve ekran durumuyla birlikte).
+        // Ölçüm aralığının ortasındaki an esas alınır: gece yarısını aşan veri doğru güne yazılır.
+        val mid = System.currentTimeMillis() - (dt * 500).toLong()
+        val hour = Calendar.getInstance().apply { timeInMillis = mid }.get(Calendar.HOUR_OF_DAY)
+        val today = StatsStore.dayAt(this, mid)
         today.add(true, dMobRx, dMobTx, dt, hour)
         today.add(false, dWifiRx, dWifiTx, dt, hour)
         val kind = ConnInfo.kind
@@ -251,7 +245,7 @@ class SpeedService : Service() {
         usedMobile += dMobRx + dMobTx
         usedWifi += dWifiRx + dWifiTx
         saveCounters()
-        addToHour(now, dTotRx + dTotTx, dMobRx + dMobTx)
+        roller.add(now, dTotRx + dTotTx, dMobRx + dMobTx)
         if (nowEl - lastHourSave > 60_000L) {
             lastHourSave = nowEl
             saveHour()
@@ -315,26 +309,16 @@ class SpeedService : Service() {
 
     /** Kayan sayacı sıfırlar: o andan itibaren yeniden birikir. */
     private fun resetRoll() {
-        hourTotal.fill(0)
-        hourMobile.fill(0)
-        bucketMinute = System.currentTimeMillis() / 60_000L
+        roller.reset(System.currentTimeMillis())
         prefs.edit().putLong(Prefs.ROLL_RESET_AT, System.currentTimeMillis()).apply()
         saveHour()
         rollValue = 0L
     }
 
-    /** Son n dakikanın toplamı. */
-    private fun rollSum(arr: LongArray, minutes: Int): Long {
-        var sum = 0L
-        for (k in 0 until minutes.coerceIn(1, ROLL_MIN)) sum += arr[((bucketMinute - k) % ROLL_MIN).toInt()]
-        return sum
-    }
-
     /** Seçilen süre ve kapsama göre (uzun metin, kısa metin). */
     private fun rollTexts(): Pair<String, String> {
         val h = prefs.getInt(Prefs.ROLL_HOURS, 1)
-        val total = rollSum(hourTotal, h * 60)
-        val mobile = rollSum(hourMobile, h * 60)
+        val (total, mobile) = roller.sum(System.currentTimeMillis(), h * 60)
         val wifi = (total - mobile).coerceAtLeast(0)
         val scope = prefs.getInt(Prefs.ROLL_SCOPE, 0)
         val value = when (scope) {
@@ -355,61 +339,19 @@ class SpeedService : Service() {
         return "Son $h saat$what: ${Fmt.bytes(value)}$detail" to "${h}sa$what ${Fmt.bytes(value)}"
     }
 
-    /** Kovaları şimdiki dakikaya kadar ilerletir; aradaki boş dakikaları sıfırlar. */
-    private fun advanceTo(minute: Long) {
-        if (bucketMinute == 0L || minute - bucketMinute >= ROLL_MIN || minute < bucketMinute) {
-            hourTotal.fill(0)
-            hourMobile.fill(0)
-            bucketMinute = minute
-            return
-        }
-        while (bucketMinute < minute) {
-            bucketMinute++
-            val i = (bucketMinute % ROLL_MIN).toInt()
-            hourTotal[i] = 0
-            hourMobile[i] = 0
-        }
-    }
-
-    private fun addToHour(nowMs: Long, total: Long, mobile: Long) {
-        advanceTo(nowMs / 60_000L)
-        val i = (bucketMinute % ROLL_MIN).toInt()
-        hourTotal[i] += total
-        hourMobile[i] += mobile
-    }
-
     private fun saveHour() {
-        prefs.edit().putString(
-            Prefs.HOUR_BUCKETS,
-            "$bucketMinute|${hourTotal.joinToString(",")}|${hourMobile.joinToString(",")}"
-        ).apply()
+        prefs.edit().putString(Prefs.HOUR_BUCKETS, roller.serialize()).apply()
     }
 
     private fun loadHour() {
-        try {
-            val parts = (prefs.getString(Prefs.HOUR_BUCKETS, "") ?: "").split("|")
-            if (parts.size != 3) return
-            val totals = parts[1].split(",")
-            val mobiles = parts[2].split(",")
-            if (totals.size != ROLL_MIN || mobiles.size != ROLL_MIN) return
-            bucketMinute = parts[0].toLong()
-            totals.forEachIndexed { i, v -> hourTotal[i] = v.toLong() }
-            mobiles.forEachIndexed { i, v -> hourMobile[i] = v.toLong() }
-            // Servis kapalıyken geçen dakikaları boşalt
-            advanceTo(System.currentTimeMillis() / 60_000L)
-            rollTexts()
-        } catch (e: Exception) {
-            hourTotal.fill(0)
-            hourMobile.fill(0)
-            bucketMinute = 0L
-        }
+        if (roller.restore(prefs.getString(Prefs.HOUR_BUCKETS, ""), System.currentTimeMillis())) rollTexts()
     }
 
     // ---------- Veri sınırı ----------
 
     private fun checkQuota(used: Long, mobileOnly: Boolean, hours: Int) {
         val mb = prefs.getInt(Prefs.QUOTA_MB, 0)
-        if (mb <= 0 || used < mb * 1048576L) return
+        if (mb <= 0 || used < Fmt.mbToBytes(mb)) return
         if (prefs.getLong(Prefs.QUOTA_WARNED, 0L) == windowStart) return
         prefs.edit().putLong(Prefs.QUOTA_WARNED, windowStart).apply()
 
