@@ -194,13 +194,27 @@ class SettingsActivity : Activity() {
             addView(Ui.hint(ctx, "\"İkisi alt alta\"da üstteki indirme, alttaki yükleme. \"Boştayken gizle\" açıkken veri akmıyorsa simge boş kalır."))
         })
 
+        // ----- Kayan son X saat -----
+        root.addView(Ui.card(ctx, "Son X saat (kayan sayaç)", "🕐").apply {
+            addView(Ui.hint(ctx, "Ne zaman baksan tam son X saati gösterir, hiç sıfırlanmaz. Dönem sayacından farkı bu."))
+            addView(Ui.label(ctx, "Süre"))
+            addView(Ui.choiceRow(ctx, Prefs.ROLL_OPTIONS.map { "Son $it sa" to it }, prefs.getInt(Prefs.ROLL_HOURS, 1)) { put(Prefs.ROLL_HOURS, it) })
+            addView(Ui.label(ctx, "Neyi saysın?"))
+            addView(Ui.choiceRow(ctx, listOf("Tümü" to 0, "Sadece mobil" to 1, "Sadece Wi-Fi" to 2), prefs.getInt(Prefs.ROLL_SCOPE, 0)) { put(Prefs.ROLL_SCOPE, it) })
+            addView(Ui.label(ctx, "Bildirimde nerede?"))
+            addView(Ui.choiceRow(ctx, listOf("Ayrı satırda" to 0, "Hızın yanında" to 1, "Gösterme" to 2), prefs.getInt(Prefs.ROLL_POS, 0)) { put(Prefs.ROLL_POS, it) })
+            addView(Ui.switch(ctx, "Mobil / Wi-Fi ayrıntısını göster", prefs.getBoolean(Prefs.ROLL_DETAIL, true)) { put(Prefs.ROLL_DETAIL, it) })
+            addView(Ui.switch(ctx, "Yüzen pencerede göster", prefs.getBoolean(Prefs.ROLL_OVERLAY, true)) { put(Prefs.ROLL_OVERLAY, it) })
+            addView(Ui.switch(ctx, "Widget'ta göster", prefs.getBoolean(Prefs.ROLL_WIDGET, true)) { put(Prefs.ROLL_WIDGET, it) })
+            addView(Ui.hint(ctx, "\"Hızın yanında\" kısa biçimde gösterir (ör. ↓ 4,2 MB/s ↑ 120 KB/s · 2sa 340 MB). Ayrıntı sadece ayrı satırda görünür."))
+        })
+
         // ----- Bildirim paneli -----
         root.addView(Ui.card(ctx, "Bildirim paneli", "🔔").apply {
             addView(Ui.hint(ctx, "Kapalıyken ilk iki satır, aşağı çekince seçtiğin tüm satırlar görünür. Değişiklikler bir saniye içinde uygulanır."))
             addView(Ui.label(ctx, "Görünecek satırlar"))
             listOf(
                 Triple("Anlık hız", Prefs.N_LINE_SPEED, true),
-                Triple("Son 1 saatin toplamı (kayan)", Prefs.N_LINE_HOUR, true),
                 Triple("Dönem kullanımı", Prefs.N_LINE_PERIOD, true),
                 Triple("Bugün: mobil / Wi-Fi", Prefs.N_LINE_TODAY, true),
                 Triple("Bugünün rekor hızı", Prefs.N_LINE_PEAK, false),

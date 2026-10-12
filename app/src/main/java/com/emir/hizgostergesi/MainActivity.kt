@@ -213,7 +213,7 @@ class MainActivity : Activity() {
         val wifi = prefs.getLong(Prefs.USED_WIFI, 0L)
         val left = Fmt.remaining(start + hours * 3_600_000L - now)
         val used = if (mobileOnly) mobile else mobile + wifi
-        heroUsage.text = "Son 60 saniye  ·  son 1 saatte ${Fmt.bytes(SpeedService.lastHourTotal)}"
+        heroUsage.text = "Son 60 saniye  ·  ${SpeedService.rollLabel.lowercase()}: ${Fmt.bytes(SpeedService.rollValue)}"
 
         val today = StatsStore.today(this)
         tileToday.value.text = Fmt.bytes(today.mobile + today.wifi)

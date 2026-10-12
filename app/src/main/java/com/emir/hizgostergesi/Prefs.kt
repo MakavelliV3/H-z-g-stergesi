@@ -39,8 +39,16 @@ object Prefs {
 
     // Bildirim paneli
     const val N_LINE_SPEED = "bildirim_hiz"
-    const val N_LINE_HOUR = "bildirim_son_saat"
-    const val HOUR_BUCKETS = "son_saat_dakikalar"
+    const val HOUR_BUCKETS = "kayan_dakikalar"
+
+    // Kayan "son X saat" sayacı
+    const val ROLL_HOURS = "kayan_saat"
+    const val ROLL_SCOPE = "kayan_kapsam"       // 0: tümü, 1: mobil, 2: Wi-Fi
+    const val ROLL_POS = "kayan_konum"          // 0: ayrı satır, 1: hız satırında, 2: gösterme
+    const val ROLL_DETAIL = "kayan_ayrinti"
+    const val ROLL_OVERLAY = "kayan_pencere"
+    const val ROLL_WIDGET = "kayan_widget"
+    val ROLL_OPTIONS = intArrayOf(1, 2, 3, 6, 12, 24)
     const val N_LINE_PERIOD = "bildirim_donem"
     const val N_LINE_TODAY = "bildirim_bugun"
     const val N_LINE_PEAK = "bildirim_rekor"

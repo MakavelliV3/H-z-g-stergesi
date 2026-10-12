@@ -67,9 +67,9 @@ class SpeedService : Service() {
     private var lastInteractive = true
     private var ticks = 0L
 
-    // Kayan "son 1 saat": dakika dakika 60 kova (toplam ve mobil)
-    private val hourTotal = LongArray(60)
-    private val hourMobile = LongArray(60)
+    // Kayan "son X saat": dakika dakika 24 saatlik kova (toplam ve mobil)
+    private val hourTotal = LongArray(ROLL_MIN)
+    private val hourMobile = LongArray(ROLL_MIN)
     private var bucketMinute = 0L
     private var lastHourSave = 0L
 
@@ -251,7 +251,7 @@ class SpeedService : Service() {
         usedWifi += dWifiRx + dWifiTx
         saveCounters()
         addToHour(now, dTotRx + dTotTx, dMobRx + dMobTx)
-        if (nowEl - lastHourSave > 30_000L) {
+        if (nowEl - lastHourSave > 60_000L) {
             lastHourSave = nowEl
             saveHour()
         }
@@ -276,8 +276,15 @@ class SpeedService : Service() {
             // Bildirimde hangi satırlar görünsün: kullanıcının seçimi
             val lines = ArrayList<String>()
             if (prefs.getBoolean(Prefs.N_LINE_SPEED, true)) lines += speedText
-            if (prefs.getBoolean(Prefs.N_LINE_HOUR, true)) {
-                lines += "Son 1 saat: ${Fmt.bytes(lastHourTotal)}  (mobil ${Fmt.bytes(lastHourMobile)})"
+            // Kayan son X saat: ayrı satır ya da hız satırının yanında
+            val roll = rollTexts()
+            when (prefs.getInt(Prefs.ROLL_POS, 0)) {
+                0 -> lines += roll.first
+                1 -> if (lines.isNotEmpty() && prefs.getBoolean(Prefs.N_LINE_SPEED, true)) {
+                    lines[0] = lines[0] + "  ·  " + roll.second
+                } else {
+                    lines.add(0, roll.first)
+                }
             }
             if (prefs.getBoolean(Prefs.N_LINE_PERIOD, true)) lines += periodText
             if (prefs.getBoolean(Prefs.N_LINE_TODAY, true)) lines += todayText
@@ -293,19 +300,53 @@ class SpeedService : Service() {
             val n = build(down, up, bits, lines, color)
             lastNotification = n
             nm.notify(NOTIF_ID, n)
-            updateOverlay(down, up, bits, "$hours sa: ${Fmt.bytes(periodUsed)}$conn", color)
-            updateWidgets(nowEl, speedText, todayText, "Son $hours sa ($scope): ${Fmt.bytes(periodUsed)}", color)
+            val overlayLine = if (prefs.getBoolean(Prefs.ROLL_OVERLAY, true)) roll.second else "$hours sa: ${Fmt.bytes(periodUsed)}"
+            updateOverlay(down, up, bits, "$overlayLine$conn", color)
+            val widgetLine = if (prefs.getBoolean(Prefs.ROLL_WIDGET, true)) roll.first else "Son $hours sa ($scope): ${Fmt.bytes(periodUsed)}"
+            updateWidgets(nowEl, speedText, todayText, widgetLine, color)
         }
 
         val interval = prefs.getInt(Prefs.INTERVAL_SEC, 1).coerceIn(1, 10) * 1000L
         handler.postDelayed(tick, if (slow) 15_000L else interval)
     }
 
-    // ---------- Kayan son 1 saat ----------
+    // ---------- Kayan son X saat ----------
+
+    /** Son n dakikanın toplamı. */
+    private fun rollSum(arr: LongArray, minutes: Int): Long {
+        var sum = 0L
+        for (k in 0 until minutes.coerceIn(1, ROLL_MIN)) sum += arr[((bucketMinute - k) % ROLL_MIN).toInt()]
+        return sum
+    }
+
+    /** Seçilen süre ve kapsama göre (uzun metin, kısa metin). */
+    private fun rollTexts(): Pair<String, String> {
+        val h = prefs.getInt(Prefs.ROLL_HOURS, 1)
+        val total = rollSum(hourTotal, h * 60)
+        val mobile = rollSum(hourMobile, h * 60)
+        val wifi = (total - mobile).coerceAtLeast(0)
+        val scope = prefs.getInt(Prefs.ROLL_SCOPE, 0)
+        val value = when (scope) {
+            1 -> mobile
+            2 -> wifi
+            else -> total
+        }
+        val what = when (scope) {
+            1 -> " mobil"
+            2 -> " Wi-Fi"
+            else -> ""
+        }
+        val detail = if (scope == 0 && prefs.getBoolean(Prefs.ROLL_DETAIL, true)) {
+            "  (mobil ${Fmt.bytes(mobile)} • Wi-Fi ${Fmt.bytes(wifi)})"
+        } else ""
+        rollValue = value
+        rollLabel = "Son $h saat$what"
+        return "Son $h saat$what: ${Fmt.bytes(value)}$detail" to "${h}sa$what ${Fmt.bytes(value)}"
+    }
 
     /** Kovaları şimdiki dakikaya kadar ilerletir; aradaki boş dakikaları sıfırlar. */
     private fun advanceTo(minute: Long) {
-        if (bucketMinute == 0L || minute - bucketMinute >= 60 || minute < bucketMinute) {
+        if (bucketMinute == 0L || minute - bucketMinute >= ROLL_MIN || minute < bucketMinute) {
             hourTotal.fill(0)
             hourMobile.fill(0)
             bucketMinute = minute
@@ -313,7 +354,7 @@ class SpeedService : Service() {
         }
         while (bucketMinute < minute) {
             bucketMinute++
-            val i = (bucketMinute % 60).toInt()
+            val i = (bucketMinute % ROLL_MIN).toInt()
             hourTotal[i] = 0
             hourMobile[i] = 0
         }
@@ -321,11 +362,9 @@ class SpeedService : Service() {
 
     private fun addToHour(nowMs: Long, total: Long, mobile: Long) {
         advanceTo(nowMs / 60_000L)
-        val i = (bucketMinute % 60).toInt()
+        val i = (bucketMinute % ROLL_MIN).toInt()
         hourTotal[i] += total
         hourMobile[i] += mobile
-        lastHourTotal = hourTotal.sum()
-        lastHourMobile = hourMobile.sum()
     }
 
     private fun saveHour() {
@@ -339,13 +378,15 @@ class SpeedService : Service() {
         try {
             val parts = (prefs.getString(Prefs.HOUR_BUCKETS, "") ?: "").split("|")
             if (parts.size != 3) return
+            val totals = parts[1].split(",")
+            val mobiles = parts[2].split(",")
+            if (totals.size != ROLL_MIN || mobiles.size != ROLL_MIN) return
             bucketMinute = parts[0].toLong()
-            parts[1].split(",").forEachIndexed { i, v -> if (i < 60) hourTotal[i] = v.toLong() }
-            parts[2].split(",").forEachIndexed { i, v -> if (i < 60) hourMobile[i] = v.toLong() }
+            totals.forEachIndexed { i, v -> hourTotal[i] = v.toLong() }
+            mobiles.forEachIndexed { i, v -> hourMobile[i] = v.toLong() }
             // Servis kapalıyken geçen dakikaları boşalt
             advanceTo(System.currentTimeMillis() / 60_000L)
-            lastHourTotal = hourTotal.sum()
-            lastHourMobile = hourMobile.sum()
+            rollTexts()
         } catch (e: Exception) {
             hourTotal.fill(0)
             hourMobile.fill(0)
@@ -603,12 +644,15 @@ class SpeedService : Service() {
         @Synchronized
         fun recent(): LongArray = LongArray(ring.size) { ring[(ringPos + it) % ring.size] }
 
-        /** Kayan son 1 saatin toplamı (ana ekran için). */
+        /** 24 saat × 60 dakika. */
+        const val ROLL_MIN = 1440
+
+        /** Kayan sayacın son değeri ve etiketi (ana ekran için). */
         @Volatile
-        var lastHourTotal = 0L
+        var rollValue = 0L
 
         @Volatile
-        var lastHourMobile = 0L
+        var rollLabel = "Son 1 saat"
 
         /** Ana ekrandaki canlı hız kartı için son ölçülen hızlar. */
         @Volatile
