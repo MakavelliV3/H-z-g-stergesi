@@ -24,6 +24,7 @@ object Insights {
             ensureChannels(c)
             weekly(c)
             anomalies(c)
+            appLimits(c)
         } catch (e: Exception) {
             // bir sonraki turda tekrar denenir
         }
@@ -149,6 +150,33 @@ object Insights {
         prefs.edit().putString(Prefs.ANOMALY_SENT, "$dayKey|" + sentToday.joinToString(",")).apply()
     }
 
+    /** Kullanıcının uygulamalara koyduğu günlük sınırlar. */
+    private fun appLimits(c: Context) {
+        val limits = Prefs.appLimits(c)
+        if (limits.isEmpty() || !NetStats.hasAccess(c)) return
+        val prefs = Prefs.get(c)
+        val todayStart = startOfToday()
+        val dayKey = StatsStore.key(todayStart)
+        val sent = prefs.getString(Prefs.APP_LIMIT_SENT, "") ?: ""
+        val sentToday = if (sent.startsWith("$dayKey|")) sent.substringAfter("|").split(",").toMutableSet() else mutableSetOf()
+
+        val today = NetStats.queryApps(c, todayStart, System.currentTimeMillis() + 60_000L, withNames = false)
+            .associateBy { it.uid }
+        for ((uid, mb) in limits) {
+            val app = today[uid] ?: continue
+            if (app.total < mb * 1048576L || sentToday.contains(uid.toString())) continue
+            sentToday += uid.toString()
+            NetStats.describe(c, app)
+            notify(
+                c, ANOMALY_CHANNEL, 2000 + (uid % 1000),
+                "${app.name} günlük sınırı aştı",
+                "Bugün ${Fmt.bytes(app.total)} kullandı (sınır: ${Fmt.mb(mb)}). Mobil ${Fmt.bytes(app.mobile)} • Wi-Fi ${Fmt.bytes(app.wifi)}",
+                Intent(c, AppDetailActivity::class.java).putExtra(AppDetailActivity.EXTRA_UID, uid)
+            )
+        }
+        prefs.edit().putString(Prefs.APP_LIMIT_SENT, "$dayKey|" + sentToday.joinToString(",")).apply()
+    }
+
     private fun notify(c: Context, channel: String, id: Int, title: String, text: String, open: Intent) {
         val nm = c.getSystemService(NotificationManager::class.java)
         val pi = PendingIntent.getActivity(
@@ -156,7 +184,7 @@ object Insights {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         val n = Notification.Builder(c, channel)
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))

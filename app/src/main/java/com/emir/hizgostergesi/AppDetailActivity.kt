@@ -1,7 +1,10 @@
 package com.emir.hizgostergesi
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Gravity
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -23,10 +26,12 @@ class AppDetailActivity : Activity() {
     private lateinit var head: LinearLayout
     private lateinit var chart: BarChart
     private lateinit var body: LinearLayout
+    private lateinit var limitBox: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val (scroll, root) = Ui.page(this)
+        root.addView(Ui.topBar(this, "Uygulama"))
 
         head = Ui.card(this)
         root.addView(head)
@@ -44,8 +49,10 @@ class AppDetailActivity : Activity() {
             addView(chart, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this@AppDetailActivity, 190)))
         })
 
-        body = Ui.card(this, "Ayrıntılar")
+        body = Ui.card(this, "Ayrıntılar", "📋")
         root.addView(body)
+        limitBox = Ui.card(this, "Günlük sınır", "⏳")
+        root.addView(limitBox)
         setContentView(scroll)
         load()
     }
@@ -76,11 +83,41 @@ class AppDetailActivity : Activity() {
             val summary = NetStats.queryApps(this, starts[0], now, withNames = false).firstOrNull { it.uid == uid }
                 ?: AppUsage(uid)
             NetStats.describe(this, summary)
+            val today = daily.last().let { it[0] + it[1] }
 
             runOnUiThread {
-                if (!isFinishing) render(summary, starts, daily)
+                if (!isFinishing) {
+                    render(summary, starts, daily)
+                    renderLimit(uid, today)
+                }
             }
         }.start()
+    }
+
+    private fun renderLimit(uid: Int, today: Long) {
+        while (limitBox.childCount > 1) limitBox.removeViewAt(1)
+        val current = Prefs.appLimits(this)[uid] ?: 0
+        limitBox.addView(Ui.hint(this, "Bu uygulama bir günde seçtiğin miktarı geçerse bildirim gelir (yaklaşık 15 dakikada bir kontrol edilir)."))
+        limitBox.addView(Ui.choiceRow(
+            this,
+            listOf("Kapalı" to 0, "100 MB" to 100, "250 MB" to 250, "500 MB" to 500, "1 GB" to 1024, "2 GB" to 2048, "5 GB" to 5120),
+            current
+        ) {
+            Prefs.setAppLimit(this, uid, it)
+            renderLimit(uid, today)
+        })
+        if (current > 0) {
+            val ratio = today.toDouble() / (current * 1048576.0)
+            limitBox.addView(Ui.text(this, "Bugün ${Fmt.bytes(today)} / ${Fmt.mb(current)}", 15f, topDp = 8).apply { typeface = Ui.MEDIUM })
+            limitBox.addView(PercentBar(this, ratio.toFloat(), if (ratio >= 1) 0xFFE53935.toInt() else Ui.ACCENT),
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 8)).apply { topMargin = Ui.dp(this@AppDetailActivity, 4) })
+        }
+        val pkg = packageManager.getPackagesForUid(uid)?.firstOrNull()
+        if (pkg != null) {
+            limitBox.addView(Ui.button(this, "Android'deki veri ayarlarını aç") {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")))
+            })
+        }
     }
 
     private fun render(a: AppUsage, starts: LongArray, daily: Array<LongArray>) {
@@ -115,8 +152,8 @@ class AppDetailActivity : Activity() {
             Triple(dayLabel.format(java.util.Date(starts[i])), daily[i][0], daily[i][1])
         }
 
-        // Ayrıntılar
-        body.removeAllViews()
+        // Ayrıntılar (kart başlığı kalsın)
+        while (body.childCount > 1) body.removeViewAt(1)
         fun line(title: String, value: String) {
             val l = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL

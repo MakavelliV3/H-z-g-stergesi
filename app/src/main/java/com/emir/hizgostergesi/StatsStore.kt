@@ -12,8 +12,30 @@ import java.util.Date
 import java.util.Locale
 import java.util.TreeMap
 
+/** Bir bağlantı türündeki kullanım ve hız ölçümleri. */
+class ConnStat {
+    var bytes = 0L
+    var activeSec = 0.0
+    var activeBytes = 0L
+
+    val avg: Long get() = if (activeSec >= 1) (activeBytes / activeSec).toLong() else 0L
+}
+
 /** Bir günün mobil ve Wi-Fi istatistikleri. Hızlar bayt/saniye cinsinden. */
 class DayStats {
+    /** Bağlantı türüne göre (5G, 4.5G, 4G, Wi-Fi…) kullanım. */
+    val byConn = HashMap<String, ConnStat>()
+
+    fun addConn(kind: String, rx: Long, tx: Long, dt: Double) {
+        if (rx + tx == 0L || kind.isEmpty()) return
+        val s = byConn.getOrPut(kind) { ConnStat() }
+        s.bytes += rx + tx
+        if (rx / dt >= ACTIVE_RATE) {
+            s.activeSec += dt
+            s.activeBytes += rx
+        }
+    }
+
     var mobile = 0L
     var wifi = 0L
     var peakMobile = 0L
@@ -76,6 +98,12 @@ class DayStats {
         activeWifiSec += o.activeWifiSec
         activeWifiBytes += o.activeWifiBytes
         screenOff += o.screenOff
+        o.byConn.forEach { (k, v) ->
+            val s = byConn.getOrPut(k) { ConnStat() }
+            s.bytes += v.bytes
+            s.activeSec += v.activeSec
+            s.activeBytes += v.activeBytes
+        }
         for (h in 0 until 24) {
             hourUse[h] += o.hourUse[h]
             hourMobSec[h] += o.hourMobSec[h]
@@ -102,6 +130,11 @@ class DayStats {
             .put("ams", activeMobileSec).put("amb", activeMobileBytes)
             .put("aws", activeWifiSec).put("awb", activeWifiBytes)
             .put("so", screenOff)
+        if (byConn.isNotEmpty()) {
+            val c = JSONObject()
+            byConn.forEach { (k, v) -> c.put(k, JSONArray(listOf(v.bytes, v.activeSec, v.activeBytes))) }
+            o.put("c", c)
+        }
         if (hasHourly) {
             o.put("hu", JSONArray(hourUse.toList()))
             o.put("hms", JSONArray(hourMobSec.toList()))
@@ -136,6 +169,16 @@ class DayStats {
             activeWifiSec = o.optDouble("aws", 0.0)
             activeWifiBytes = o.optLong("awb")
             screenOff = o.optLong("so")
+            o.optJSONObject("c")?.let { c ->
+                c.keys().forEach { k ->
+                    val a = c.optJSONArray(k) ?: return@forEach
+                    byConn[k] = ConnStat().apply {
+                        bytes = a.optLong(0)
+                        activeSec = a.optDouble(1, 0.0)
+                        activeBytes = a.optLong(2)
+                    }
+                }
+            }
             readLongs(o.optJSONArray("hu"), hourUse)
             readDoubles(o.optJSONArray("hms"), hourMobSec)
             readLongs(o.optJSONArray("hmb"), hourMobBytes)

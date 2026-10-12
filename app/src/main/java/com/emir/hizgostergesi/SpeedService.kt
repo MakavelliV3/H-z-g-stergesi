@@ -65,6 +65,7 @@ class SpeedService : Service() {
     private var lastWidgetAt = 0L
     private var lastInsightsAt = -1L
     private var lastInteractive = true
+    private var ticks = 0L
 
     private var usedMobile = 0L
     private var usedWifi = 0L
@@ -114,6 +115,8 @@ class SpeedService : Service() {
         val color = prefs.getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR)
         enterForeground(build(0, 0, prefs.getBoolean(Prefs.UNIT_BITS, false), listOf("Başlatılıyor…"), color))
 
+        ConnInfo.start(this)
+
         val filter = IntentFilter(Intent.ACTION_SCREEN_ON)
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(screenOn, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -149,6 +152,7 @@ class SpeedService : Service() {
             // zaten kayıtlı değil
         }
         removeOverlay()
+        ConnInfo.stop(this)
         saveCounters()
         StatsStore.save(this, force = true)
         super.onDestroy()
@@ -206,12 +210,17 @@ class SpeedService : Service() {
         val up = (dTotTx / dt).toLong()
         lastDown = down
         lastUp = up
+        pushSample(down)
 
         // Günlük istatistik (saat saat ve ekran durumuyla birlikte)
         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         val today = StatsStore.today(this)
         today.add(true, dMobRx, dMobTx, dt, hour)
         today.add(false, dWifiRx, dWifiTx, dt, hour)
+        val kind = ConnInfo.kind
+        today.addConn(if (kind in ConnInfo.CELL_KINDS) kind else "Mobil", dMobRx, dMobTx, dt)
+        today.addConn(if (kind == "Ethernet") "Ethernet" else "Wi-Fi", dWifiRx, dWifiTx, dt)
+        if (++ticks % 15 == 0) ConnInfo.refresh(this)
         val interactive = power.isInteractive
         // Bu turdaki veri, bir önceki turdan beri akan veridir: o sırada ekran kapalıysa "ekran kapalı" sayılır
         if (!lastInteractive) today.screenOff += dTotRx + dTotTx
@@ -219,7 +228,7 @@ class SpeedService : Service() {
         StatsStore.save(this)
 
         // Haftalık özet ve olağandışı kullanım kontrolü: yarım saatte bir, arka planda
-        if (lastInsightsAt < 0 || nowEl - lastInsightsAt > 30 * 60_000L) {
+        if (lastInsightsAt < 0 || nowEl - lastInsightsAt > 15 * 60_000L) {
             lastInsightsAt = nowEl
             val ctx = applicationContext
             Thread { Insights.runChecks(ctx) }.start()
@@ -245,7 +254,8 @@ class SpeedService : Service() {
             val color = prefs.getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR)
             val scope = if (mobileOnly) "mobil" else "toplam"
             val (arrowDown, arrowUp) = arrows()
-            val speedText = "$arrowDown ${Fmt.speed(down, bits)}    $arrowUp ${Fmt.speed(up, bits)}"
+            val conn = if (prefs.getBoolean(Prefs.N_SHOW_CONN, true) && ConnInfo.label.isNotEmpty()) "  ·  ${ConnInfo.label}" else ""
+            val speedText = "$arrowDown ${Fmt.speed(down, bits)}    $arrowUp ${Fmt.speed(up, bits)}$conn"
             val periodText = "Son $hours sa ($scope): ${Fmt.bytes(periodUsed)} • " +
                 "${Fmt.remaining(windowStart + periodMs - now)} sonra sıfırlanır"
             val todayText = "Bugün  Mobil ${Fmt.bytes(today.mobile)} • Wi-Fi ${Fmt.bytes(today.wifi)}"
@@ -267,7 +277,7 @@ class SpeedService : Service() {
             val n = build(down, up, bits, lines, color)
             lastNotification = n
             nm.notify(NOTIF_ID, n)
-            updateOverlay(down, up, bits, "$hours sa: ${Fmt.bytes(periodUsed)}", color)
+            updateOverlay(down, up, bits, "$hours sa: ${Fmt.bytes(periodUsed)}$conn", color)
             updateWidgets(nowEl, speedText, todayText, "Son $hours sa ($scope): ${Fmt.bytes(periodUsed)}", color)
         }
 
@@ -285,7 +295,7 @@ class SpeedService : Service() {
 
         val what = if (mobileOnly) "mobil veri" else "toplam"
         val n = Notification.Builder(this, WARN_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle("Veri sınırı aşıldı: ${Fmt.mb(mb)}")
             .setContentText("Son $hours saatte $what kullanım ${Fmt.bytes(used)} oldu.")
             .setContentIntent(openApp())
@@ -510,6 +520,20 @@ class SpeedService : Service() {
         const val WARN_ID = 2
         const val ACTION_RESET = "com.emir.hizgostergesi.RESET"
         const val ACTION_TOGGLE_OVERLAY = "com.emir.hizgostergesi.TOGGLE_OVERLAY"
+
+        /** Son 60 ölçüm (ana ekrandaki canlı grafik için). */
+        private val ring = LongArray(60)
+        private var ringPos = 0
+
+        @Synchronized
+        fun pushSample(v: Long) {
+            ring[ringPos] = v
+            ringPos = (ringPos + 1) % ring.size
+        }
+
+        /** Eskiden yeniye son ölçümler. */
+        @Synchronized
+        fun recent(): LongArray = LongArray(ring.size) { ring[(ringPos + it) % ring.size] }
 
         /** Ana ekrandaki canlı hız kartı için son ölçülen hızlar. */
         @Volatile

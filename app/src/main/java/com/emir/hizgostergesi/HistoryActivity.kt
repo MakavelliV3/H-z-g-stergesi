@@ -41,6 +41,7 @@ class HistoryActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val (scroll, root) = Ui.page(this)
+        root.addView(Ui.topBar(this, "İstatistik"))
 
         root.addView(Ui.header(this, "Bugün"))
         todayBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

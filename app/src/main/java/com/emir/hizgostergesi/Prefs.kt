@@ -51,8 +51,16 @@ object Prefs {
     const val N_BTN_RESET = "bildirim_sifirla_dugmesi"
     const val N_LOCKSCREEN = "bildirim_kilit_ekrani"
 
-    // Uygulama bazlı sayım
+    const val N_SHOW_CONN = "baglanti_turu_goster"
+
+    // Uygulama bazlı sayım ve sınırlar
     const val APPS_RESET_AT = "uygulama_sifirlama"
+    const val APP_LIMITS = "uygulama_sinirlari"
+    const val APP_LIMIT_SENT = "uygulama_sinir_gonderilen"
+
+    // Genel
+    const val DYNAMIC_COLOR = "material_you"
+    const val ONBOARDED = "kurulum_tamam"
 
     // Analiz bildirimleri
     const val WEEKLY_ON = "haftalik_ozet"
@@ -68,6 +76,21 @@ object Prefs {
     val HOUR_OPTIONS = intArrayOf(1, 2, 3, 6, 12, 24)
 
     fun get(c: Context): SharedPreferences = c.getSharedPreferences(NAME, Context.MODE_PRIVATE)
+
+    /** Uygulama başına günlük sınırlar (uid -> MB). "uid=mb;uid=mb" olarak saklanır. */
+    fun appLimits(c: Context): Map<Int, Int> =
+        (get(c).getString(APP_LIMITS, "") ?: "").split(";").mapNotNull {
+            val parts = it.split("=")
+            val uid = parts.getOrNull(0)?.toIntOrNull()
+            val mb = parts.getOrNull(1)?.toIntOrNull()
+            if (uid != null && mb != null && mb > 0) uid to mb else null
+        }.toMap()
+
+    fun setAppLimit(c: Context, uid: Int, mb: Int) {
+        val map = appLimits(c).toMutableMap()
+        if (mb > 0) map[uid] = mb else map.remove(uid)
+        get(c).edit().putString(APP_LIMITS, map.entries.joinToString(";") { "${it.key}=${it.value}" }).apply()
+    }
 }
 
 /** Sayı biçimlendirme yardımcıları. */

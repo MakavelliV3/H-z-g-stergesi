@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Bağlantı türü (5G/4G) için; arama ya da numara bilgisi okunmaz -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- Kurulumda "arka planda kapanmasın" adımı için -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Uygulama bazlı kullanım: kullanıcı ayarlardan açar -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
@@ -18,9 +22,11 @@
         tools:ignore="QueryAllPackagesPermission" />
 
     <application
+        android:name=".App"
         android:allowBackup="false"
-        android:icon="@android:drawable/stat_sys_download_done"
-        android:label="Hız Göstergesi">
+        android:icon="@mipmap/ic_launcher"
+        android:label="Hız Göstergesi"
+        android:roundIcon="@mipmap/ic_launcher_round">
 
         <activity
             android:name=".MainActivity"
@@ -31,6 +37,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="Ayarlar"
+            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
+
+        <activity
+            android:name=".OnboardingActivity"
+            android:exported="false"
+            android:label="Kurulum"
+            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
 
         <activity
             android:name=".HistoryActivity"
