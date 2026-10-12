@@ -30,6 +30,13 @@ object Prefs {
     const val OVERLAY_SIZE = "pencere_boyut"
     const val OVERLAY_ALPHA = "pencere_koyuluk"
 
+    // Durum çubuğu simgesi
+    const val SB_MODE = "cubuk_icerik"
+    const val SB_SIZE = "cubuk_boyut"
+    const val SB_UNIT = "cubuk_birim"
+    const val SB_BOLD = "cubuk_kalin"
+    const val SB_HIDE_IDLE = "cubuk_bosta_gizle"
+
     // Pil
     const val INTERVAL_SEC = "aralik_sn"
     const val SLOW_WHEN_OFF = "ekran_kapali_yavas"
@@ -75,6 +82,9 @@ object Fmt {
     }
 
     fun speed(b: Long, bits: Boolean) = speedParts(b, bits).let { "${it.first} ${it.second}" }
+
+    /** Kısa biçim: "4,2M", "350K". */
+    fun compact(b: Long, bits: Boolean) = speedParts(b, bits).let { it.first + it.second.first() }
 
     fun remaining(ms: Long): String {
         val totalMin = (ms / 60000).coerceAtLeast(0)

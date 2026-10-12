@@ -24,7 +24,11 @@ class HistoryActivity : Activity() {
     private lateinit var todayBox: LinearLayout
     private lateinit var chart: BarChart
     private lateinit var list: LinearLayout
-    private var days = 7
+    private lateinit var totalText: TextView
+    private var mode = 0 // 0: 7 gün, 1: 30 gün, 2: aylık, 3: yıllık
+
+    /** Grafikte bir çubuk, listede bir satır. */
+    private class Bucket(val label: String, val title: String, val stats: DayStats)
     private val handler = Handler(Looper.getMainLooper())
 
     private val refresh = object : Runnable {
@@ -43,11 +47,15 @@ class HistoryActivity : Activity() {
         root.addView(todayBox)
         root.addView(Ui.hint(this, "Ortalama hız, sadece veri akarken geçen süreye göre hesaplanır (boşta geçen saniyeler sayılmaz)."))
 
-        root.addView(Ui.header(this, "Geçmiş"))
-        root.addView(Ui.choiceRow(this, listOf("Son 7 gün" to 7, "Son 30 gün" to 30), days) {
-            days = it
+        root.addView(Ui.header(this, "Rapor"))
+        root.addView(Ui.choiceRow(
+            this, listOf("7 gün" to 0, "30 gün" to 1, "Aylık" to 2, "Yıllık" to 3), mode
+        ) {
+            mode = it
             render()
         })
+        totalText = Ui.text(this, "", 15f, bold = true, topDp = 6)
+        root.addView(totalText)
         val legend = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         legend.addView(Ui.text(this, "■ Mobil veri   ", 14f, color = mobileColor))
         legend.addView(Ui.text(this, "■ Wi-Fi", 14f, color = wifiColor))
@@ -87,33 +95,71 @@ class HistoryActivity : Activity() {
         todayBox.addView(card("📶 Wi-Fi", wifiColor, today.wifi, today.peakWifi, today.avgWifi, bits))
 
         // Grafik: eskiden yeniye
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.DAY_OF_MONTH, -(days - 1))
-        val dayNum = SimpleDateFormat("d", Locale("tr"))
-        val bars = ArrayList<Triple<String, Long, Long>>()
-        val keys = ArrayList<Pair<String, Long>>()
-        repeat(days) {
-            val key = StatsStore.key(cal.timeInMillis)
-            val s = all[key]
-            bars += Triple(dayNum.format(cal.time), s?.mobile ?: 0L, s?.wifi ?: 0L)
-            keys += key to cal.timeInMillis
-            cal.add(Calendar.DAY_OF_MONTH, 1)
+        val buckets = when (mode) {
+            0 -> dailyBuckets(all, 7)
+            1 -> dailyBuckets(all, 30)
+            2 -> monthlyBuckets()
+            else -> yearlyBuckets()
         }
-        chart.data = bars
+        chart.data = buckets.map { Triple(it.label, it.stats.mobile, it.stats.wifi) }
+
+        val sum = DayStats()
+        buckets.forEach { sum.merge(it.stats) }
+        val span = when (mode) {
+            0 -> "Son 7 gün"
+            1 -> "Son 30 gün"
+            2 -> "Son 12 ay"
+            else -> "Tüm yıllar"
+        }
+        totalText.text = "$span toplamı: ${Fmt.bytes(sum.mobile + sum.wifi)}\n" +
+            "Mobil ${Fmt.bytes(sum.mobile)}  •  Wi-Fi ${Fmt.bytes(sum.wifi)}"
 
         // Liste: yeniden eskiye
         list.removeAllViews()
-        val title = SimpleDateFormat("d MMMM EEEE", Locale("tr"))
         var any = false
-        keys.asReversed().forEach { (key, time) ->
-            val s = all[key] ?: return@forEach
+        buckets.asReversed().forEach { b ->
+            val s = b.stats
             if (s.mobile + s.wifi == 0L) return@forEach
             any = true
-            list.addView(Ui.text(this, title.format(java.util.Date(time)), 15f, bold = true, topDp = 14))
+            list.addView(Ui.text(this, "${b.title} — ${Fmt.bytes(s.mobile + s.wifi)}", 15f, bold = true, topDp = 14))
             list.addView(Ui.text(this, line("Mobil", s.mobile, s.peakMobile, s.avgMobile, bits), 13f, color = mobileColor))
             list.addView(Ui.text(this, line("Wi-Fi", s.wifi, s.peakWifi, s.avgWifi, bits), 13f, color = wifiColor))
         }
-        if (!any) list.addView(Ui.hint(this, "Henüz kayıt yok. Uygulama çalıştıkça günler burada birikir."))
+        if (!any) list.addView(Ui.hint(this, "Henüz kayıt yok. Uygulama çalıştıkça burada birikir."))
+    }
+
+    private val tr = Locale("tr")
+
+    private fun dailyBuckets(all: Map<String, DayStats>, n: Int): List<Bucket> {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_MONTH, -(n - 1))
+        val label = SimpleDateFormat("d", tr)
+        val title = SimpleDateFormat("d MMMM EEEE", tr)
+        return List(n) {
+            val b = Bucket(label.format(cal.time), title.format(cal.time), all[StatsStore.key(cal.timeInMillis)] ?: DayStats())
+            cal.add(Calendar.DAY_OF_MONTH, 1)
+            b
+        }
+    }
+
+    private fun monthlyBuckets(): List<Bucket> {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.DAY_OF_MONTH, 1)
+        cal.add(Calendar.MONTH, -11)
+        val key = SimpleDateFormat("yyyy-MM", Locale.US)
+        val label = SimpleDateFormat("MMM", tr)
+        val title = SimpleDateFormat("MMMM yyyy", tr)
+        return List(12) {
+            val b = Bucket(label.format(cal.time), title.format(cal.time), StatsStore.aggregate(this, key.format(cal.time)))
+            cal.add(Calendar.MONTH, 1)
+            b
+        }
+    }
+
+    private fun yearlyBuckets(): List<Bucket> {
+        val now = Calendar.getInstance().get(Calendar.YEAR)
+        val first = StatsStore.firstYear(this).coerceAtMost(now)
+        return (first..now).map { y -> Bucket("$y", "$y yılı", StatsStore.aggregate(this, "$y")) }
     }
 
     private fun line(name: String, used: Long, peak: Long, avg: Long, bits: Boolean): String =
@@ -176,7 +222,7 @@ class BarChart(c: Context) : View(c) {
             canvas.drawRect(left, bottom - mh, right, bottom, paint)
             paint.color = wifiColor
             canvas.drawRect(left, bottom - mh - wh, right, bottom - mh, paint)
-            if (data.size <= 10 || i % 5 == 0 || i == data.lastIndex) {
+            if (data.size <= 12 || i % 5 == 0 || i == data.lastIndex) {
                 paint.color = textColor
                 paint.textAlign = Paint.Align.CENTER
                 canvas.drawText(label, cx, height - 4 * d, paint)
@@ -184,6 +230,6 @@ class BarChart(c: Context) : View(c) {
         }
         paint.color = textColor
         paint.textAlign = Paint.Align.LEFT
-        canvas.drawText("En yüksek gün: ${Fmt.bytes(max)}", 0f, 12 * d, paint)
+        canvas.drawText("En yüksek: ${Fmt.bytes(max)}", 0f, 12 * d, paint)
     }
 }

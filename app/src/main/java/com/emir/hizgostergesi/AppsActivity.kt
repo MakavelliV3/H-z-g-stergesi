@@ -71,10 +71,8 @@ class AppsActivity : Activity() {
         content.addView(Ui.text(this,
             "Uygulamaların ne kadar veri kullandığını görmek için Android'in \"Kullanım erişimi\" izni lazım. " +
                 "Açılan listede Hız Göstergesi'ni bulup izni aç, sonra geri dön.", 15f))
-        content.addView(Button(this).apply {
-            text = "İzin ver"
-            isAllCaps = false
-            setOnClickListener { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+        content.addView(Ui.button(this, "İzin ver", filled = true) {
+            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         })
     }
 

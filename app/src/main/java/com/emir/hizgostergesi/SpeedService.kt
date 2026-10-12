@@ -105,7 +105,7 @@ class SpeedService : Service() {
         usedWifi = prefs.getLong(Prefs.USED_WIFI, 0L)
 
         val color = prefs.getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR)
-        enterForeground(build(0, prefs.getBoolean(Prefs.UNIT_BITS, false), "Başlatılıyor…", "", "", color))
+        enterForeground(build(0, 0, prefs.getBoolean(Prefs.UNIT_BITS, false), "Başlatılıyor…", "", "", color))
 
         val filter = IntentFilter(Intent.ACTION_SCREEN_ON)
         if (Build.VERSION.SDK_INT >= 33) {
@@ -197,6 +197,8 @@ class SpeedService : Service() {
 
         val down = (dTotRx / dt).toLong()
         val up = (dTotTx / dt).toLong()
+        lastDown = down
+        lastUp = up
 
         // Günlük istatistik
         val today = StatsStore.today(this)
@@ -228,7 +230,7 @@ class SpeedService : Service() {
                 "${Fmt.remaining(windowStart + periodMs - now)} sonra sıfırlanır"
             val todayText = "Bugün  Mobil ${Fmt.bytes(today.mobile)} • Wi-Fi ${Fmt.bytes(today.wifi)}"
 
-            val n = build(down, bits, speedText, periodText, todayText, color)
+            val n = build(down, up, bits, speedText, periodText, todayText, color)
             lastNotification = n
             nm.notify(NOTIF_ID, n)
             updateOverlay(down, up, bits, "$hours sa: ${Fmt.bytes(periodUsed)}", color)
@@ -265,10 +267,8 @@ class SpeedService : Service() {
     )
 
     private fun build(
-        down: Long, bits: Boolean, speedText: String, periodText: String, todayText: String, color: Int
+        down: Long, up: Long, bits: Boolean, speedText: String, periodText: String, todayText: String, color: Int
     ): Notification {
-        val (num, unit) = Fmt.speedParts(down, bits)
-
         val small = RemoteViews(packageName, R.layout.notif).apply {
             setTextViewText(R.id.speed, speedText)
             setTextViewText(R.id.usage, periodText)
@@ -297,7 +297,7 @@ class SpeedService : Service() {
         ).build()
 
         return Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(textIcon(num, unit))
+            .setSmallIcon(Icon.createWithBitmap(StatusIcon.draw(prefs, down, up, bits)))
             .setCustomContentView(small)
             .setCustomBigContentView(big)
             .setStyle(Notification.DecoratedCustomViewStyle())
@@ -307,25 +307,6 @@ class SpeedService : Service() {
             .setOnlyAlertOnce(true)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .build()
-    }
-
-    /** Sayıyı üstte, birimi altta olacak şekilde durum çubuğu simgesi çizer. */
-    private fun textIcon(num: String, unit: String): Icon {
-        val size = 96
-        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-            textSize = 60f
-        }
-        while (paint.measureText(num) > size && paint.textSize > 20f) paint.textSize -= 2f
-        canvas.drawText(num, size / 2f, 58f, paint)
-        paint.textSize = 34f
-        while (paint.measureText(unit) > size && paint.textSize > 16f) paint.textSize -= 2f
-        canvas.drawText(unit, size / 2f, 92f, paint)
-        return Icon.createWithBitmap(bmp)
     }
 
     // ---------- Widget ----------
@@ -455,5 +436,12 @@ class SpeedService : Service() {
         const val WARN_ID = 2
         const val ACTION_RESET = "com.emir.hizgostergesi.RESET"
         const val ACTION_TOGGLE_OVERLAY = "com.emir.hizgostergesi.TOGGLE_OVERLAY"
+
+        /** Ana ekrandaki canlı hız kartı için son ölçülen hızlar. */
+        @Volatile
+        var lastDown = 0L
+
+        @Volatile
+        var lastUp = 0L
     }
 }

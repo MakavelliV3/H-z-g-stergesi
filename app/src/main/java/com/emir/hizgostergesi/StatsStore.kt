@@ -6,6 +6,7 @@ import android.util.AtomicFile
 import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TreeMap
@@ -45,6 +46,18 @@ class DayStats {
         }
     }
 
+    /** Başka bir günü/ayı bunun üstüne ekler (aylık ve yıllık toplamlar için). */
+    fun merge(o: DayStats) {
+        mobile += o.mobile
+        wifi += o.wifi
+        peakMobile = maxOf(peakMobile, o.peakMobile)
+        peakWifi = maxOf(peakWifi, o.peakWifi)
+        activeMobileSec += o.activeMobileSec
+        activeMobileBytes += o.activeMobileBytes
+        activeWifiSec += o.activeWifiSec
+        activeWifiBytes += o.activeWifiBytes
+    }
+
     fun toJson(): JSONObject = JSONObject()
         .put("m", mobile).put("w", wifi)
         .put("pm", peakMobile).put("pw", peakWifi)
@@ -68,12 +81,16 @@ class DayStats {
     }
 }
 
-/** Günlük istatistikleri bellekte tutar, ara ara dosyaya yazar. Son 40 gün saklanır. */
+/**
+ * Günlük istatistikleri bellekte tutar, ara ara dosyaya yazar.
+ * Son 400 gün gün gün saklanır; daha eskileri aylık özete katlanır, böylece yıllık rapor kaybolmaz.
+ */
 object StatsStore {
     private const val FILE = "gunluk.json"
-    private const val KEEP_DAYS = 40
+    private const val KEEP_DAYS = 400
 
     private var cache: TreeMap<String, DayStats>? = null
+    private var monthCache: TreeMap<String, DayStats>? = null
     private var lastSave = 0L
     private val keyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
@@ -83,16 +100,49 @@ object StatsStore {
     @Synchronized
     fun all(c: Context): TreeMap<String, DayStats> {
         cache?.let { return it }
-        val map = TreeMap<String, DayStats>()
+        val days = TreeMap<String, DayStats>()
+        val months = TreeMap<String, DayStats>()
         try {
-            val txt = String(AtomicFile(File(c.filesDir, FILE)).readFully())
-            val o = JSONObject(txt)
-            o.keys().forEach { k -> map[k] = DayStats.fromJson(o.getJSONObject(k)) }
+            val o = JSONObject(String(AtomicFile(File(c.filesDir, FILE)).readFully()))
+            if (o.has("days")) {
+                val d = o.getJSONObject("days")
+                d.keys().forEach { k -> days[k] = DayStats.fromJson(d.getJSONObject(k)) }
+                val m = o.optJSONObject("months")
+                m?.keys()?.forEach { k -> months[k] = DayStats.fromJson(m.getJSONObject(k)) }
+            } else {
+                // eski biçim: sadece günler
+                o.keys().forEach { k -> days[k] = DayStats.fromJson(o.getJSONObject(k)) }
+            }
         } catch (e: Exception) {
             // ilk açılış ya da bozuk dosya: boş başla
         }
-        cache = map
-        return map
+        cache = days
+        monthCache = months
+        return days
+    }
+
+    /** Gün gün tutulmayan eski aylar (yyyy-MM). */
+    @Synchronized
+    fun archivedMonths(c: Context): TreeMap<String, DayStats> {
+        all(c)
+        return monthCache!!
+    }
+
+    /** Anahtarı bu önekle başlayan her şeyin toplamı: "2026-10" bir ay, "2026" bir yıl. */
+    @Synchronized
+    fun aggregate(c: Context, prefix: String): DayStats {
+        val r = DayStats()
+        all(c).forEach { (k, v) -> if (k.startsWith(prefix)) r.merge(v) }
+        archivedMonths(c).forEach { (k, v) -> if (k.startsWith(prefix)) r.merge(v) }
+        return r
+    }
+
+    /** Kaydı olan en eski yıl. */
+    @Synchronized
+    fun firstYear(c: Context): Int {
+        val a = all(c).firstEntry()?.key?.take(4)?.toIntOrNull()
+        val b = archivedMonths(c).keys.firstOrNull()?.take(4)?.toIntOrNull()
+        return listOfNotNull(a, b).minOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)
     }
 
     @Synchronized
@@ -104,9 +154,16 @@ object StatsStore {
         if (!force && now - lastSave < 15_000) return
         lastSave = now
         val map = all(c)
-        while (map.size > KEEP_DAYS) map.pollFirstEntry()
-        val o = JSONObject()
-        map.forEach { (k, v) -> o.put(k, v.toJson()) }
+        val months = archivedMonths(c)
+        while (map.size > KEEP_DAYS) {
+            val old = map.pollFirstEntry() ?: break
+            months.getOrPut(old.key.take(7)) { DayStats() }.merge(old.value)
+        }
+        val d = JSONObject()
+        map.forEach { (k, v) -> d.put(k, v.toJson()) }
+        val m = JSONObject()
+        months.forEach { (k, v) -> m.put(k, v.toJson()) }
+        val o = JSONObject().put("days", d).put("months", m)
         val file = AtomicFile(File(c.filesDir, FILE))
         val out = try {
             file.startWrite()
