@@ -59,6 +59,9 @@ object Insights {
         return StatsStore.sumRange(c, start, end)
     }
 
+    /** "%25 daha fazla" gibi; önceki dönem boşsa null. */
+    fun percentChangeOrNull(now: Long, before: Long): String? = if (before <= 0) null else percentChange(now, before)
+
     fun percentChange(now: Long, before: Long): String {
         if (before <= 0) return "önceki dönemde kayıt yok"
         val p = ((now - before) * 100.0 / before).toInt()

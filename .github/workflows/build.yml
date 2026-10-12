@@ -36,9 +36,9 @@ jobs:
           cp test.log rapor/test.log || true
           cp app/build/reports/lint-results-debug.txt rapor/lint.txt || echo "lint raporu yok" > rapor/lint.txt
           cat app/build/test-results/testDebugUnitTest/*.xml > rapor/unit-tests.xml 2>/dev/null || echo "test sonucu yok" > rapor/unit-tests.xml
-          gh release delete reports -y --cleanup-tag || true
-          gh release create reports rapor/test.log rapor/lint.txt rapor/unit-tests.xml --prerelease \
-            --title "Test ve lint raporları" --notes "Son derlemenin birim testi ve lint raporları"
+          gh release view reports > /dev/null 2>&1 || gh release create reports --prerelease \
+            --title "Test ve lint raporları" --notes "Son derlemenin birim testi ve lint raporları" || true
+          gh release upload reports rapor/test.log rapor/lint.txt rapor/unit-tests.xml --clobber || true
 
       - name: Testler geçti mi?
         if: steps.tests.outcome == 'failure'
@@ -55,20 +55,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk HizGostergesi.apk
-          gh release delete latest -y --cleanup-tag || true
-          gh release create latest HizGostergesi.apk \
-            --title "Hız Göstergesi" \
-            --notes "Otomatik derlendi. HizGostergesi.apk dosyasını indirip kur."
-          gh release delete build-log -y --cleanup-tag || true
+          gh release view latest > /dev/null 2>&1 || gh release create latest \
+            --title "Hız Göstergesi" --notes "Otomatik derlendi. HizGostergesi.apk dosyasını indirip kur."
+          for i in 1 2 3; do gh release upload latest HizGostergesi.apk --clobber && break; sleep 10; done
 
       - name: Hata kaydını yayınla
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete build-log -y --cleanup-tag || true
-          gh release create build-log build.log --prerelease \
-            --title "Derleme hatası" --notes "Son başarısız derlemenin kaydı"
+          [ -f build.log ] || echo "Derleme kaydı yok (hata rapor yükleme adımında olabilir)" > build.log
+          gh release view build-log > /dev/null 2>&1 || gh release create build-log --prerelease \
+            --title "Derleme hatası" --notes "Son başarısız derlemenin kaydı" || true
+          gh release upload build-log build.log --clobber || true
 
   emulator:
     runs-on: ubuntu-latest

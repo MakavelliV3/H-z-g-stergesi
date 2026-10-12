@@ -83,6 +83,14 @@ object Ui {
     fun outline(c: Context) = if (night(c)) sys(c, android.R.color.system_neutral2_700, 0xFF2C313B.toInt())
     else sys(c, android.R.color.system_neutral2_100, 0xFFDDE0E6.toInt())
 
+    /**
+     * Yazı ve simgeler için vurgu rengi: koyu temada daha açık tonu kullanılır,
+     * yoksa koyu zemin üstünde koyu mavi okunmaz.
+     */
+    fun accentText(c: Context): Int = if (night(c)) {
+        if (dynamic && Build.VERSION.SDK_INT >= 31) c.getColor(android.R.color.system_accent1_200) else 0xFF9DBBFF.toInt()
+    } else ACCENT
+
     /** Vurgu renginin hafif (saydam) hâli. */
     fun accentSoft(alpha: Int = 0x26) = (ACCENT and 0x00FFFFFF) or (alpha shl 24)
 
@@ -283,7 +291,7 @@ object Ui {
         textSize = 15f
         typeface = MEDIUM
         gravity = Gravity.CENTER
-        setTextColor(if (filled) Color.WHITE else ACCENT)
+        setTextColor(if (filled) Color.WHITE else accentText(c))
         val v = dp(c, 13)
         setPadding(v, v, v, v)
         background = ripple(rounded(if (filled) ACCENT else accentSoft(), dp(c, 50).toFloat()))

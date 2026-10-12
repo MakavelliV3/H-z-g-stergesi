@@ -188,9 +188,11 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
                 if (a.isFinishing) return@runOnUiThread
                 compareBox.removeAllViews()
                 stat(compareBox, "Bu hafta", Fmt.bytes(wm + ww),
-                    "Geçen haftanın aynı günlerine göre ${Insights.percentChange(wm + ww, pwm + pww)}")
+                    Insights.percentChangeOrNull(wm + ww, pwm + pww)?.let { "Geçen haftanın aynı günlerine göre $it" }
+                        ?: "Geçen hafta için karşılaştıracak kayıt yok")
                 stat(compareBox, "Bu ay", Fmt.bytes(mm + mw),
-                    "Geçen ayın aynı günlerine göre ${Insights.percentChange(mm + mw, pmm + pmw)}")
+                    Insights.percentChangeOrNull(mm + mw, pmm + pmw)?.let { "Geçen ayın aynı günlerine göre $it" }
+                        ?: "Geçen ay için karşılaştıracak kayıt yok")
                 stat(compareBox, "Ay sonu tahmini", "~${Fmt.bytes(forecastTotal)}",
                     "Bu tempoyla devam edersen. Mobil veri: ~${Fmt.bytes(forecastMobile)}")
                 compareBox.addView(Ui.hint(a,
@@ -213,7 +215,7 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
         }
         val line = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
         line.addView(Ui.text(a, title, 15f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        line.addView(Ui.text(a, value, 17f, bold = true, color = Ui.ACCENT))
+        line.addView(Ui.text(a, value, 17f, bold = true, color = Ui.accentText(a)))
         row.addView(line)
         row.addView(Ui.hint(a, sub))
         box.addView(row)

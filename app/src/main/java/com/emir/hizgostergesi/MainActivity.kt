@@ -209,7 +209,7 @@ class MainActivity : Activity() {
         items.indices.forEach { i ->
             val on = i == current
             pills[i].background = if (on) Ui.rounded(Ui.accentSoft(0x33), Ui.dp(this, 16).toFloat()) else null
-            icons[i].imageTintList = ColorStateList.valueOf(if (on) Ui.ACCENT else Ui.secondary(this))
+            icons[i].imageTintList = ColorStateList.valueOf(if (on) Ui.accentText(this) else Ui.secondary(this))
             labels[i].setTextColor(if (on) Ui.primary(this) else Ui.secondary(this))
             labels[i].typeface = if (on) Ui.MEDIUM else android.graphics.Typeface.DEFAULT
         }

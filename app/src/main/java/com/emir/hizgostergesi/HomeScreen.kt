@@ -55,7 +55,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         connChip = TextView(a).apply {
             textSize = 13f
             typeface = Ui.MEDIUM
-            setTextColor(Ui.ACCENT)
+            setTextColor(Ui.accentText(a))
             setPadding(dp(14), dp(7), dp(14), dp(7))
             background = Ui.rounded(Ui.accentSoft(), dp(50).toFloat())
         }
@@ -320,7 +320,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             typeface = Ui.MEDIUM
             maxLines = 1
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        head.addView(Ui.text(a, Fmt.bytes(app.total), 14f, bold = true, color = Ui.ACCENT))
+        head.addView(Ui.text(a, Fmt.bytes(app.total), 14f, bold = true, color = Ui.accentText(a)))
         mid.addView(head)
         mid.addView(PercentBar(a, app.total.toFloat() / max, Ui.ACCENT), LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(6)
