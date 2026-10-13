@@ -389,7 +389,7 @@ class SpeedService : Service() {
                 listOf(Prefs.SB_MODE, Prefs.SB_SIZE, Prefs.SB_UNIT, Prefs.N_SIZE, Prefs.N_ARROWS, Prefs.N_BG).joinToString(",") { prefs.getInt(it, -1).toString() } +
                 listOf(Prefs.SB_BOLD, Prefs.SB_HIDE_IDLE, Prefs.N_MONO, Prefs.N_BTN_OVERLAY, Prefs.N_BTN_RESET, Prefs.N_BTN_ROLL_RESET, Prefs.N_LOCKSCREEN, Prefs.OVERLAY)
                     .joinToString("") { if (prefs.getBoolean(it, false)) "1" else "0" } + color + "|" + smallLines.joinToString("|") +
-                prefs.getBoolean(Prefs.N_GRAPH, true) + prefs.getBoolean(Prefs.N_BAR, true)
+                prefs.getBoolean(Prefs.N_GRAPH, true) + prefs.getBoolean(Prefs.N_BAR, true) + prefs.getBoolean(Prefs.N_LIVE, false)
             if (key != lastNotifKey || nowEl - lastNotifAt > 30_000L) {
                 val n = build(down, up, bits, lines, color, smallLines, plan)
                 lastNotification = n
@@ -546,12 +546,25 @@ class SpeedService : Service() {
             }
         }
 
+        val live = LiveUpdate.enabled(this)
         val builder = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(Icon.createWithBitmap(StatusIcon.draw(prefs, down, up, bits)))
-            .setCustomContentView(small)
-            .setCustomBigContentView(big)
-            .setStyle(Notification.DecoratedCustomViewStyle())
             .setContentIntent(openApp())
+        if (live) {
+            // Canlı bildirim: Android'in standart görünümü (özel tasarım hap olamıyor)
+            builder.setContentTitle(smallLines.firstOrNull() ?: lines.firstOrNull() ?: "")
+                .setContentText(smallLines.getOrNull(1) ?: "")
+                .setStyle(Notification.BigTextStyle().bigText(lines.drop(1).joinToString("\n")))
+            if (plan != null && prefs.getBoolean(Prefs.N_BAR, true)) {
+                builder.setProgress(1000, (plan.ratio * 1000).toInt().coerceIn(0, 1000), false)
+            }
+            LiveUpdate.request(builder, if (down > 0 || up == 0L) Fmt.compact(down, bits) else "↑" + Fmt.compact(up, bits))
+        } else {
+            builder.setCustomContentView(small)
+                .setCustomBigContentView(big)
+                .setStyle(Notification.DecoratedCustomViewStyle())
+        }
+        builder
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setVisibility(
@@ -561,7 +574,7 @@ class SpeedService : Service() {
 
         // Renkli arka plan (telefon destekliyorsa bildirimin kendisi boyanır)
         val bg = prefs.getInt(Prefs.N_BG, 0)
-        if (bg != 0) builder.setColorized(true).setColor(if (bg == SettingsActivity.BG_ACCENT) Ui.ACCENT else bg)
+        if (bg != 0 && !live) builder.setColorized(true).setColor(if (bg == SettingsActivity.BG_ACCENT) Ui.ACCENT else bg)
 
         if (prefs.getBoolean(Prefs.N_BTN_OVERLAY, true)) {
             val overlayOn = prefs.getBoolean(Prefs.OVERLAY, false)

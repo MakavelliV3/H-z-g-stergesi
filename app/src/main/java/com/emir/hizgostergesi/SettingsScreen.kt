@@ -21,6 +21,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         "Boştayken gizle" to SettingsActivity.CAT_STATUS,
         "Bildirim satırları" to SettingsActivity.CAT_NOTIF,
         "Bildirim kapalı görünüm" to SettingsActivity.CAT_NOTIF,
+        "Canlı bildirim (sol üstte hap, Now Bar)" to SettingsActivity.CAT_NOTIF,
         "Bildirimde hız grafiği" to SettingsActivity.CAT_NOTIF,
         "Bağlantı türünü göster (5G, Wi-Fi)" to SettingsActivity.CAT_NOTIF,
         "Bildirim yazı boyutu" to SettingsActivity.CAT_NOTIF,

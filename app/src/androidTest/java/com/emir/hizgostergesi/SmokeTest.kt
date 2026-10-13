@@ -329,6 +329,10 @@ class SmokeTest {
             p.edit().putInt(Prefs.N_SMALL, mode).putBoolean(Prefs.N_GRAPH, mode % 2 == 0).putBoolean(Prefs.N_BAR, mode < 2).commit()
             pause(1300)
         }
+        // Canlı bildirim modu (Android 16 değilse klasik)
+        p.edit().putBoolean(Prefs.N_LIVE, true).commit()
+        pause(1500)
+        p.edit().putBoolean(Prefs.N_LIVE, false).commit()
         // Kısayollar
         for (a in listOf(ShortcutActivity.ACTION_PLAN, ShortcutActivity.ACTION_APPS, ShortcutActivity.ACTION_RESET)) {
             ctx.startActivity(Intent(a).setClass(ctx, ShortcutActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

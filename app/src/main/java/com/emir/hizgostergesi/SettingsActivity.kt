@@ -160,6 +160,29 @@ class SettingsActivity : Activity() {
 
     private fun notification(root: LinearLayout) {
         val ctx = this
+        root.addView(Ui.card(ctx, "Bildirim türü", "⚡").apply {
+            addView(Ui.choiceRow(ctx, listOf("Klasik" to false, "Canlı (sol üstte hap)" to true), prefs.getBoolean(Prefs.N_LIVE, false)) {
+                put(Prefs.N_LIVE, it)
+                if (it && LiveUpdate.supported && !LiveUpdate.allowed(ctx)) {
+                    toast("Hız Göstergesi için \"Canlı bildirimler\"i aç")
+                    try { startActivity(LiveUpdate.settingsIntent(ctx)) } catch (e: Exception) { }
+                }
+                recreate()
+            })
+            addView(Ui.hint(ctx, when {
+                !LiveUpdate.supported -> "Canlı bildirim Android 16 (One UI 8) gerektirir; bu telefonda klasik bildirim kullanılır."
+                prefs.getBoolean(Prefs.N_LIVE, false) -> "Hız, durum çubuğunun solunda hap olarak ve kilit ekranındaki Now Bar'da görünür. " +
+                    "Android'in standart tasarımı kullanıldığı için mini grafik ve renkli arka plan bu modda yoktur."
+                else -> "Klasik: kendi tasarımımız (mini grafik, satır seçimi). Canlı: kronometre gibi durum çubuğunun solunda hap ve Now Bar."
+            }))
+            if (prefs.getBoolean(Prefs.N_LIVE, false) && LiveUpdate.supported && !LiveUpdate.allowed(ctx)) {
+                addView(Ui.button(ctx, "Canlı bildirim iznini aç", filled = true) {
+                    try { startActivity(LiveUpdate.settingsIntent(ctx)) } catch (e: Exception) {
+                        startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                    }
+                })
+            }
+        })
         root.addView(Ui.card(ctx, "Kapalı görünüm", "📶").apply {
             addView(Ui.hint(ctx, "Bildirim küçükken (yukarı kaydırılmış hâli) hızın altında ne görünsün?"))
             addView(Ui.choiceRow(ctx, listOf("Paketten kalan" to 0, "Bugünkü kullanım" to 1, "Son X saat" to 2, "Sadece hız" to 3),
