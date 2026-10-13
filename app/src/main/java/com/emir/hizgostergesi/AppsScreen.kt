@@ -73,12 +73,20 @@ class AppsScreen(a: MainActivity) : Screen(a) {
             })
             resetText = Ui.hint(a, "")
             addView(Ui.button(a, "Sayımı şimdi sıfırla") {
+                val prevAt = prefs.getLong(Prefs.APPS_RESET_AT, 0L)
+                val prevRange = range
                 prefs.edit().putLong(Prefs.APPS_RESET_AT, System.currentTimeMillis()).apply()
                 range = 8
                 buildRange()
                 updateResetText()
                 load()
-                Toast.makeText(a, "Sayım sıfırlandı, bundan sonrası sayılacak", Toast.LENGTH_SHORT).show()
+                Ui.undoBar(a, "Sayım sıfırlandı") {
+                    prefs.edit().putLong(Prefs.APPS_RESET_AT, prevAt).apply()
+                    range = prevRange
+                    buildRange()
+                    updateResetText()
+                    load()
+                }
             })
             addView(resetText)
         })

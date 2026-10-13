@@ -131,6 +131,51 @@ object Ui {
         return v
     }
 
+    /** Ekranın altında birkaç saniye duran "… · Geri al" çubuğu. */
+    fun undoBar(a: Activity, message: String, onUndo: () -> Unit) {
+        val content = a.findViewById<android.widget.FrameLayout>(android.R.id.content) ?: return
+        content.findViewWithTag<View>("undo")?.let { content.removeView(it) }
+        val bottomInset = a.window.decorView.rootWindowInsets?.let { barInsets(it).second } ?: 0
+        val bar = LinearLayout(a).apply {
+            tag = "undo"
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(a, 18), dp(a, 6), dp(a, 6), dp(a, 6))
+            background = rounded(primary(a), dp(a, 18).toFloat())
+            elevation = dp(a, 6).toFloat()
+            addView(TextView(a).apply {
+                text = message
+                textSize = 14f
+                setTextColor(bg(a))
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        val dismiss = Runnable {
+            bar.animate().alpha(0f).translationY(dp(a, 24).toFloat()).setDuration(200).withEndAction { content.removeView(bar) }.start()
+        }
+        bar.addView(TextView(a).apply {
+            text = "Geri al"
+            textSize = 14f
+            typeface = MEDIUM
+            setTextColor(if (night(a)) 0xFF1A56DB.toInt() else 0xFF9DBBFF.toInt())
+            setPadding(dp(a, 14), dp(a, 10), dp(a, 14), dp(a, 10))
+            isClickable = true
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                onUndo()
+                bar.removeCallbacks(dismiss)
+                dismiss.run()
+            }
+        })
+        content.addView(bar, android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM
+        ).apply { setMargins(dp(a, 16), 0, dp(a, 16), dp(a, 20) + bottomInset) })
+        bar.alpha = 0f
+        bar.translationY = dp(a, 24).toFloat()
+        bar.animate().alpha(1f).translationY(0f).setDuration(220).start()
+        bar.postDelayed(dismiss, 6000)
+    }
+
     /** Dokununca dalga efekti veren arka plan. */
     fun ripple(content: GradientDrawable, rippleColor: Int = 0x33808080) =
         RippleDrawable(ColorStateList.valueOf(rippleColor), content, null)

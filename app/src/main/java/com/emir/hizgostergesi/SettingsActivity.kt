@@ -380,10 +380,13 @@ class SettingsActivity : Activity() {
             }
             update()
             addView(Ui.button(ctx, "Kayan sayacı şimdi sıfırla") {
-                startForegroundService(Intent(ctx, SpeedService::class.java).setAction(SpeedService.ACTION_RESET_ROLL))
-                prefs.edit().putLong(Prefs.ROLL_RESET_AT, System.currentTimeMillis()).apply()
-                update()
-                toast("Kayan sayaç sıfırlandı")
+                startForegroundService(Intent(ctx, SpeedService::class.java).setAction(SpeedService.ACTION_RESET_ROLL)
+                    .putExtra(SpeedService.EXTRA_FROM_APP, true))
+                resetText.text = "Az önce sıfırlandı."
+                Ui.undoBar(this@SettingsActivity, "Kayan sayaç sıfırlandı") {
+                    startForegroundService(Intent(ctx, SpeedService::class.java).setAction(SpeedService.ACTION_UNDO_ROLL))
+                    resetText.postDelayed({ update() }, 500)
+                }
             })
             addView(resetText)
         })
@@ -394,8 +397,11 @@ class SettingsActivity : Activity() {
             addView(Ui.label(ctx, "Kaç saatte bir sıfırlansın?"))
             addView(Ui.choiceRow(ctx, Prefs.HOUR_OPTIONS.map { "$it sa" to it }, prefs.getInt(Prefs.HOURS, 1)) { put(Prefs.HOURS, it) })
             addView(Ui.button(ctx, "Dönem sayacını şimdi sıfırla") {
-                startForegroundService(Intent(ctx, SpeedService::class.java).setAction(SpeedService.ACTION_RESET))
-                toast("Dönem sayacı sıfırlandı")
+                startForegroundService(Intent(ctx, SpeedService::class.java).setAction(SpeedService.ACTION_RESET)
+                    .putExtra(SpeedService.EXTRA_FROM_APP, true))
+                Ui.undoBar(this@SettingsActivity, "Dönem sayacı sıfırlandı") {
+                    startForegroundService(Intent(ctx, SpeedService::class.java).setAction(SpeedService.ACTION_UNDO_RESET))
+                }
             })
         })
     }

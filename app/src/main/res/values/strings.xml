@@ -2,4 +2,12 @@
 <resources>
     <string name="widget_small_desc">Sadece anlık indirme hızı (1×1)</string>
     <string name="widget_large_desc">Hız grafiği, bugünkü kullanım ve paket durumu</string>
+    <string name="sc_overlay">Yüzen pencere</string>
+    <string name="sc_overlay_long">Yüzen pencereyi aç/kapat</string>
+    <string name="sc_plan">Paketim</string>
+    <string name="sc_plan_long">Paket durumu</string>
+    <string name="sc_reset">Sayacı sıfırla</string>
+    <string name="sc_reset_long">Son X saat sayacını sıfırla</string>
+    <string name="sc_apps">Uygulamalar</string>
+    <string name="sc_apps_long">Uygulama bazlı kullanım</string>
 </resources>

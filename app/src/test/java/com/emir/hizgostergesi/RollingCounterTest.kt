@@ -89,4 +89,21 @@ class RollingCounterTest {
         r.add(t0 + 2 * min, 5, 1)
         assertEquals(5L to 1L, r.sum(t0 + 2 * min, 60))
     }
+
+    @Test
+    fun undoReset_keepsOldAndNewUsage() {
+        val t0 = 1_700_000_000_000L
+        val r = RollingCounter()
+        r.add(t0, 1000, 400)
+        r.add(t0 + 60_000, 500, 0)
+        val saved = r.serialize()
+        r.reset(t0 + 120_000)
+        r.add(t0 + 150_000, 70, 70)          // sıfırlamadan sonra biriken
+        val since = r.serialize()
+        r.restore(saved, t0 + 160_000)
+        RollingCounter.mergeInto(r, since, t0 + 160_000)
+        val (total, mobile) = r.sum(t0 + 160_000, 60)
+        assertEquals(1570L, total)
+        assertEquals(470L, mobile)
+    }
 }

@@ -131,8 +131,35 @@ class SpeedService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         lastNotification?.let { enterForeground(it) }
         when (intent?.action) {
-            ACTION_RESET -> resetWindow(System.currentTimeMillis())
-            ACTION_RESET_ROLL -> resetRoll()
+            ACTION_RESET -> {
+                undoWindow = Triple(windowStart, usedMobile, usedWifi)
+                resetWindow(System.currentTimeMillis())
+                if (intent.getBooleanExtra(EXTRA_FROM_APP, false).not()) postUndo("Dönem sayacı sıfırlandı", ACTION_UNDO_RESET)
+            }
+            ACTION_RESET_ROLL -> {
+                undoRoll = roller.serialize() to prefs.getLong(Prefs.ROLL_RESET_AT, 0L)
+                resetRoll()
+                if (intent.getBooleanExtra(EXTRA_FROM_APP, false).not()) postUndo("Son ${prefs.getInt(Prefs.ROLL_HOURS, 1)} saat sayacı sıfırlandı", ACTION_UNDO_ROLL)
+            }
+            ACTION_UNDO_RESET -> undoWindow?.let { (start, mob, wifi) ->
+                windowStart = start
+                usedMobile += mob
+                usedWifi += wifi
+                saveCounters()
+                undoWindow = null
+                nm.cancel(UNDO_ID)
+            }
+            ACTION_UNDO_ROLL -> undoRoll?.let { (saved, at) ->
+                // Sıfırlamadan sonra biriken de korunur: eski kayıt + yeni kayıt
+                val since = roller.serialize()
+                roller.restore(saved, System.currentTimeMillis())
+                RollingCounter.mergeInto(roller, since, System.currentTimeMillis())
+                prefs.edit().putLong(Prefs.ROLL_RESET_AT, at).apply()
+                saveHour()
+                rollTexts()
+                undoRoll = null
+                nm.cancel(UNDO_ID)
+            }
             ACTION_TOGGLE_OVERLAY -> prefs.edit().putBoolean(Prefs.OVERLAY, !prefs.getBoolean(Prefs.OVERLAY, false)).apply()
         }
         if (intent?.action != null) {
@@ -188,6 +215,23 @@ class SpeedService : Service() {
     }
 
     private val slow = SlowDetector(125_000L)
+    private var undoWindow: Triple<Long, Long, Long>? = null
+    private var undoRoll: Pair<String, Long>? = null
+
+    /** Sıfırlamadan sonra 15 saniyelik "Geri al" bildirimi. */
+    private fun postUndo(text: String, undoAction: String) {
+        val undo = PendingIntent.getForegroundService(
+            this, 9, Intent(this, SpeedService::class.java).setAction(undoAction),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        nm.notify(UNDO_ID, Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat)
+            .setContentTitle(text)
+            .addAction(Notification.Action.Builder(null, "Geri al", undo).build())
+            .setTimeoutAfter(15_000)
+            .setAutoCancel(true)
+            .build())
+    }
     private var roamWarned = false
 
     private fun update() {
@@ -728,6 +772,11 @@ class SpeedService : Service() {
         const val ACTION_RESET = "com.emir.hizgostergesi.RESET"
         const val ACTION_TOGGLE_OVERLAY = "com.emir.hizgostergesi.TOGGLE_OVERLAY"
         const val ACTION_RESET_ROLL = "com.emir.hizgostergesi.RESET_ROLL"
+        const val ACTION_UNDO_RESET = "com.emir.hizgostergesi.UNDO_RESET"
+        const val ACTION_UNDO_ROLL = "com.emir.hizgostergesi.UNDO_ROLL"
+        /** Uygulama içinden sıfırlanınca geri alma çubuğu uygulamada gösterilir, bildirim gerekmez. */
+        const val EXTRA_FROM_APP = "uygulamadan"
+        const val UNDO_ID = 8
 
         /** Son 60 ölçüm (ana ekrandaki canlı grafik için). */
         private val ring = LongArray(60)

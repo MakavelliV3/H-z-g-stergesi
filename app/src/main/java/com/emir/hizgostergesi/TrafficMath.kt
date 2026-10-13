@@ -123,7 +123,26 @@ class RollingCounter(val size: Int = 1440) {
         minute = nowMs / 60_000L
     }
 
-    fun serialize(): String = "$minute|${total.joinToString(",")}|${mobile.joinToString(",")}"
+    /** Başka bir sayacın kovalarını bu sayaca ekler (ikisi de şu ana ilerletilir). */
+    fun addAll(other: RollingCounter, nowMs: Long) {
+        val m = nowMs / 60_000L
+        advanceTo(m)
+        other.advanceTo(m)
+        for (i in 0 until minOf(size, other.size)) {
+            total[i] += other.total[i]
+            mobile[i] += other.mobile[i]
+        }
+    }
+
+        fun serialize(): String = "$minute|${total.joinToString(",")}|${mobile.joinToString(",")}"
+
+    companion object {
+        /** Kaydedilmiş bir sayacı hedefe ekler (geri alma: eski kayıt + sıfırlamadan sonra biriken). */
+        fun mergeInto(target: RollingCounter, saved: String, nowMs: Long) {
+            val tmp = RollingCounter(target.size)
+            if (tmp.restore(saved, nowMs)) target.addAll(tmp, nowMs)
+        }
+    }
 
     /** Kaydedilmiş hâli geri yükler; biçim uymazsa false döner ve sayaç boş kalır. */
     fun restore(s: String?, nowMs: Long): Boolean {
