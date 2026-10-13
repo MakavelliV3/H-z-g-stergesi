@@ -288,4 +288,63 @@ class SmokeTest {
         val tile = ctx.packageManager.getServiceInfo(android.content.ComponentName(ctx, SpeedTile::class.java), 0)
         assertTrue(tile.permission == "android.permission.BIND_QUICK_SETTINGS_TILE")
     }
+
+    @Test
+    fun a15_v32Features() {
+        val p = Prefs.get(ctx)
+        // Her tema, her etkinlikte açılmalı (hep karanlık açık ve kapalı)
+        for (t in 0..3) for (dark in listOf(true, false)) {
+            p.edit().putInt(Prefs.THEME, t).putBoolean(Prefs.FORCE_DARK, dark).commit()
+            Ui.init(ctx)
+            ActivityScenario.launch(MainActivity::class.java).use { sc ->
+                for (tab in 0..4) {
+                    sc.onActivity { it.select(tab) }
+                    pause(400)
+                }
+            }
+            ActivityScenario.launch<SettingsActivity>(Intent(ctx, SettingsActivity::class.java)
+                .putExtra(SettingsActivity.EXTRA_CATEGORY, SettingsActivity.CAT_LOOK)).use { pause(500) }
+        }
+        p.edit().putInt(Prefs.THEME, 0).commit()
+        Ui.init(ctx)
+        assertTrue(Icons.glyph("📦") != null && Icons.typeface(ctx) != null)
+
+        // Paket: eşitleme, ek paket
+        p.edit().putBoolean(Prefs.PLAN_ON, true).putInt(Prefs.PLAN_MB, 10 * 1024).putInt(Prefs.PLAN_DAY, 1).commit()
+        PlanState.calibrate(ctx, Fmt.mbToBytes(4 * 1024))
+        val s1 = PlanState.last!!
+        assertTrue(s1.calibrated && kotlin.math.abs(s1.remaining - Fmt.mbToBytes(4 * 1024)) < 50_000_000)
+        PlanState.addExtra(ctx, Fmt.mbToBytes(2 * 1024))
+        assertTrue(PlanState.last!!.limit == Fmt.mbToBytes(12 * 1024))
+        NetStats.tethering(ctx, 0, System.currentTimeMillis())
+
+        // Sıfırla ve geri al (servis üzerinden)
+        startService()
+        for (a in listOf(SpeedService.ACTION_RESET_ROLL, SpeedService.ACTION_UNDO_ROLL, SpeedService.ACTION_RESET, SpeedService.ACTION_UNDO_RESET)) {
+            ctx.startForegroundService(Intent(ctx, SpeedService::class.java).setAction(a))
+            pause(600)
+        }
+        // Bildirim seçenekleri
+        for (mode in 0..3) {
+            p.edit().putInt(Prefs.N_SMALL, mode).putBoolean(Prefs.N_GRAPH, mode % 2 == 0).putBoolean(Prefs.N_BAR, mode < 2).commit()
+            pause(1300)
+        }
+        // Kısayollar
+        for (a in listOf(ShortcutActivity.ACTION_PLAN, ShortcutActivity.ACTION_APPS, ShortcutActivity.ACTION_RESET)) {
+            ctx.startActivity(Intent(a).setClass(ctx, ShortcutActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            pause(1200)
+        }
+        // Sessiz saatler: her saat sessiz
+        p.edit().putBoolean(Prefs.QUIET_ON, true).putInt(Prefs.QUIET_START, 0).putInt(Prefs.QUIET_END, 0).commit()
+        assertTrue(!Quiet.active(ctx))
+        p.edit().putInt(Prefs.QUIET_END, 23).commit()
+        Quiet.channel(ctx, "uyari")
+        p.edit().putBoolean(Prefs.QUIET_ON, false).commit()
+        // Yüzen pencere seçenekleri
+        p.edit().putBoolean(Prefs.OVERLAY, true).putBoolean(Prefs.OV_LOCK, true).commit()
+        pause(1500)
+        p.edit().putBoolean(Prefs.OVERLAY, false).putBoolean(Prefs.OV_LOCK, false).commit()
+        // Güncelleme sonrası başlatma
+        BootReceiver().onReceive(ctx, Intent(Intent.ACTION_MY_PACKAGE_REPLACED))
+    }
 }

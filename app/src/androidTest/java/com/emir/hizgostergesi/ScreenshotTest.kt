@@ -173,6 +173,36 @@ class ScreenshotTest {
         }
         shell("cmd uimode night no")
 
+        // Hazır temalar (telefon açık temadayken "hep karanlık" ile)
+        for (t in 1..3) {
+            Prefs.get(ctx).edit().putInt(Prefs.THEME, t).putBoolean(Prefs.FORCE_DARK, true).commit()
+            Ui.init(ctx)
+            ActivityScenario.launch(MainActivity::class.java).use { sc ->
+                fakeLive()
+                pause(1800)
+                shot("11_tema${t}_ana")
+                shell("input swipe 540 1800 540 700 400")
+                shot("11_tema${t}_ana_asagi")
+                if (t == 1) {
+                    sc.onActivity { it.select(3) }
+                    pause(2500)
+                    shot("11_tema1_analiz")
+                }
+            }
+            if (t == 1) {
+                val look = Intent(ctx, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_CATEGORY, SettingsActivity.CAT_LOOK)
+                ActivityScenario.launch<SettingsActivity>(look).use { shot("11_tema1_gorunum") }
+                val plan = Intent(ctx, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_CATEGORY, SettingsActivity.CAT_PLAN)
+                ActivityScenario.launch<SettingsActivity>(plan).use { shot("11_tema1_paket") }
+            }
+        }
+        // Açık hâl: tema seçili, hep karanlık kapalı
+        Prefs.get(ctx).edit().putInt(Prefs.THEME, 2).putBoolean(Prefs.FORCE_DARK, false).commit()
+        Ui.init(ctx)
+        ActivityScenario.launch(MainActivity::class.java).use { fakeLive(); pause(1800); shot("11_tema2_acik") }
+        Prefs.get(ctx).edit().putInt(Prefs.THEME, 0).commit()
+        Ui.init(ctx)
+
         // Bildirim paneli ve durum çubuğu
         ctx.startForegroundService(Intent(ctx, SpeedService::class.java))
         pause(3000)
