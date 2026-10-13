@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.Toast
 import android.widget.TextView
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -118,9 +119,11 @@ class AppDetailActivity : Activity() {
         }
         val pkg = packageManager.getPackagesForUid(uid)?.firstOrNull()
         if (pkg != null) {
-            limitBox.addView(Ui.button(this, "Android'deki veri ayarlarını aç") {
+            limitBox.addView(Ui.button(this, "Arka plan verisini kısıtla", filled = true) {
                 startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")))
+                Toast.makeText(this, "Mobil veri → \"Arka planda veri kullanımına izin ver\" seçeneğini kapat", Toast.LENGTH_LONG).show()
             })
+            limitBox.addView(Ui.hint(this, "Uygulama açık değilken mobil veri harcamasını durdurur; açınca normal çalışır. Android'in uygulama ayarları açılır, Mobil veri bölümünden kapatabilirsin."))
         }
     }
 

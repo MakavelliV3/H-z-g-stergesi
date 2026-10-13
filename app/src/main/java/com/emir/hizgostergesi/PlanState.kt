@@ -130,7 +130,7 @@ object PlanState {
             }
             val nm = c.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(NotificationChannel(SUMMARY_CHANNEL, "Dönem sonu özeti", NotificationManager.IMPORTANCE_DEFAULT))
-            nm.notify(SUMMARY_ID, Notification.Builder(c, SUMMARY_CHANNEL)
+            nm.notify(SUMMARY_ID, Notification.Builder(c, Quiet.channel(c, SUMMARY_CHANNEL))
                 .setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle("Paket dönemi bitti")
                 .setContentText(text)
@@ -171,7 +171,7 @@ object PlanState {
         )
         nm.notify(
             NOTIF_ID,
-            Notification.Builder(c, CHANNEL)
+            Notification.Builder(c, Quiet.channel(c, CHANNEL))
                 .setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle(title)
                 .setContentText(text)

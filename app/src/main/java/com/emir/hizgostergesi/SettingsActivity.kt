@@ -420,6 +420,12 @@ class SettingsActivity : Activity() {
                 prefs.edit().putInt(Prefs.QUOTA_MB, it).putLong(Prefs.QUOTA_WARNED, 0L).apply()
             })
         })
+        root.addView(Ui.card(ctx, "Sessiz saatler", "🌙").apply {
+            addView(Ui.hint(ctx, "Bu saatlerde uyarılar sessiz gelir: ses, titreşim ve açılır pencere olmaz, sabah bildirim panelinde bekler. Hız bildirimi etkilenmez."))
+            addView(Ui.switch(ctx, "Sessiz saatleri kullan", prefs.getBoolean(Prefs.QUIET_ON, false)) { put(Prefs.QUIET_ON, it) })
+            addView(Ui.seekRow(ctx, "Başlangıç", 0, 23, prefs.getInt(Prefs.QUIET_START, 23), ":00") { put(Prefs.QUIET_START, it) })
+            addView(Ui.seekRow(ctx, "Bitiş", 0, 23, prefs.getInt(Prefs.QUIET_END, 8), ":00") { put(Prefs.QUIET_END, it) })
+        })
         root.addView(Ui.card(ctx, "Otomatik bildirimler", "📬").apply {
             addView(Ui.switch(ctx, "Haftalık özet (pazartesi sabahı)", prefs.getBoolean(Prefs.WEEKLY_ON, true)) { put(Prefs.WEEKLY_ON, it) })
             addView(Ui.switch(ctx, "Olağandışı kullanım uyarısı", prefs.getBoolean(Prefs.ANOMALY_ON, true)) { put(Prefs.ANOMALY_ON, it) })
@@ -455,7 +461,10 @@ class SettingsActivity : Activity() {
                 put(Prefs.OVERLAY_ALPHA, it)
                 updatePreview()
             })
-            addView(Ui.hint(ctx, "Parmağınla sürükleyip taşı. Çift dokununca gizlenir; bildirimdeki \"Pencereyi göster\" ile geri açılır. Yazı rengi Görünüm sayfasından seçilir."))
+            addView(Ui.switch(ctx, "Bırakınca kenara yapışsın", prefs.getBoolean(Prefs.OV_SNAP, true)) { put(Prefs.OV_SNAP, it) })
+            addView(Ui.switch(ctx, "Yerini kilitle", prefs.getBoolean(Prefs.OV_LOCK, false)) { put(Prefs.OV_LOCK, it) })
+            addView(Ui.switch(ctx, "Tam ekran video ve oyunlarda gizle", prefs.getBoolean(Prefs.OV_FULLSCREEN_HIDE, true)) { put(Prefs.OV_FULLSCREEN_HIDE, it) })
+            addView(Ui.hint(ctx, "Sürükleyip taşı. Tek dokunuş: bugünkü kullanım ve paketi gösteren küçük panel. Çift dokunuş: gizler; bildirimdeki \"Pencereyi göster\" ile geri açılır. Yazı rengi Görünüm sayfasından seçilir."))
         })
         root.addView(Ui.card(ctx, "Oyun modu", "🎮").apply {
             addView(Ui.hint(ctx, "Yüzen pencere sadece seçtiğin uygulamalar (oyunlar, video, hız testi…) açıkken görünür, diğer zamanlarda kendiliğinden gizlenir."))

@@ -175,7 +175,7 @@ object Insights {
             c, id, open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        val n = Notification.Builder(c, channel)
+        val n = Notification.Builder(c, Quiet.channel(c, channel))
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(title)
             .setContentText(text)

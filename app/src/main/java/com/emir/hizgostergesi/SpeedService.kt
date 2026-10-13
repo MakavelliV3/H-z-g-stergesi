@@ -78,6 +78,11 @@ class SpeedService : Service() {
     private var lastNotifAt = 0L
     private var overlay: TextView? = null
     private var overlayStyle = ""
+    /** Pencereye tek dokununca açılan küçük panel (bugün ve paket). */
+    private var overlayExpanded = false
+    /** Ön plandaki uygulama tam ekranda mı (durum çubuğu gizli: video, oyun). */
+    @Volatile
+    private var fullscreen = false
 
     private val tick = Runnable { update() }
 
@@ -279,7 +284,7 @@ class SpeedService : Service() {
         if (ConnInfo.roaming) {
             if (!roamWarned && prefs.getBoolean(Prefs.ROAM_ON, true)) {
                 roamWarned = true
-                nm.notify(ROAM_ID, Notification.Builder(this, WARN_CHANNEL_ID)
+                nm.notify(ROAM_ID, Notification.Builder(this, Quiet.channel(this, WARN_CHANNEL_ID))
                     .setSmallIcon(R.drawable.ic_stat)
                     .setContentTitle("Roaming'e geçildi")
                     .setContentText("Mobil veri dolaşımda; ücretli olabilir. Gerekmiyorsa mobil veriyi kapat.")
@@ -453,7 +458,7 @@ class SpeedService : Service() {
         prefs.edit().putLong(Prefs.QUOTA_WARNED, windowStart).apply()
 
         val what = if (mobileOnly) "mobil veri" else "toplam"
-        val n = Notification.Builder(this, WARN_CHANNEL_ID)
+        val n = Notification.Builder(this, Quiet.channel(this, WARN_CHANNEL_ID))
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle("Veri sınırı aşıldı: ${Fmt.mb(mb)}")
             .setContentText("Son $hours saatte $what kullanım ${Fmt.bytes(used)} oldu.")
@@ -651,7 +656,16 @@ class SpeedService : Service() {
             (view.background as? GradientDrawable)?.setColor(Color.argb(alpha * 255 / 100, 0, 0, 0))
         }
         view.setTextColor(Prefs.onDark(color))
-        view.text = "↓ ${Fmt.speed(down, bits)}  ↑ ${Fmt.speed(up, bits)}\n$usage"
+        val hide = fullscreen && prefs.getBoolean(Prefs.OV_FULLSCREEN_HIDE, true)
+        view.visibility = if (hide) View.INVISIBLE else View.VISIBLE
+        var text = "↓ ${Fmt.speed(down, bits)}  ↑ ${Fmt.speed(up, bits)}\n$usage"
+        if (overlayExpanded) {
+            val today = StatsStore.today(this)
+            text += "\nBugün ${Fmt.bytes(today.mobile + today.wifi)} (mobil ${Fmt.bytes(today.mobile)})"
+            PlanState.last?.let { text += "\nPaket: ${Fmt.bytes(it.remaining)} kaldı · ${PlanMath.daysLeft(System.currentTimeMillis(), it.end)} gün" }
+            text += "\nRekor ${Fmt.speed(maxOf(today.peakMobile, today.peakWifi), bits)}"
+        }
+        view.text = text
     }
 
     private fun createOverlay(): TextView? {
@@ -674,6 +688,15 @@ class SpeedService : Service() {
         }
         clamp(params)
         tv.setOnTouchListener(Drag(params))
+        // Tam ekran algılama: durum çubuğu görünmüyorsa (video, oyun) pencere gizlenir
+        tv.setOnApplyWindowInsetsListener { v, insets ->
+            if (Build.VERSION.SDK_INT >= 30) {
+                fullscreen = !insets.isVisible(android.view.WindowInsets.Type.statusBars())
+                if (fullscreen && prefs.getBoolean(Prefs.OV_FULLSCREEN_HIDE, true)) v.visibility = View.INVISIBLE
+                else v.visibility = View.VISIBLE
+            }
+            insets
+        }
         return try {
             wm.addView(tv, params)
             overlay = tv
@@ -681,6 +704,31 @@ class SpeedService : Service() {
             tv
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /** Bırakılınca en yakın yan kenara kayarak yapışır. */
+    private fun snap(v: View, p: WindowManager.LayoutParams) {
+        val dm = resources.displayMetrics
+        val margin = (8 * dm.density).toInt()
+        val target = if (p.x + v.width / 2 < dm.widthPixels / 2) margin else (dm.widthPixels - v.width - margin).coerceAtLeast(margin)
+        android.animation.ValueAnimator.ofInt(p.x, target).apply {
+            duration = 220
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener {
+                p.x = it.animatedValue as Int
+                try {
+                    wm.updateViewLayout(v, p)
+                } catch (ex: Exception) {
+                    cancel()
+                }
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: android.animation.Animator) {
+                    prefs.edit().putInt(Prefs.OVERLAY_X, p.x).putInt(Prefs.OVERLAY_Y, p.y).apply()
+                }
+            })
+            start()
         }
     }
 
@@ -724,6 +772,14 @@ class SpeedService : Service() {
         private var touchY = 0f
 
         private val detector = GestureDetector(this@SpeedService, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                overlayExpanded = !overlayExpanded
+                overlay?.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                handler.removeCallbacks(tick)
+                handler.post(tick)
+                return true
+            }
+
             override fun onDoubleTap(e: MotionEvent): Boolean {
                 prefs.edit().putBoolean(Prefs.OVERLAY, false).apply()
                 removeOverlay()
@@ -747,6 +803,7 @@ class SpeedService : Service() {
                     touchY = e.rawY
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    if (prefs.getBoolean(Prefs.OV_LOCK, false)) return true
                     p.x = startX + (e.rawX - touchX).toInt()
                     p.y = startY + (e.rawY - touchY).toInt()
                     try {
@@ -756,7 +813,11 @@ class SpeedService : Service() {
                     }
                 }
                 MotionEvent.ACTION_UP -> {
-                    prefs.edit().putInt(Prefs.OVERLAY_X, p.x).putInt(Prefs.OVERLAY_Y, p.y).apply()
+                    if (prefs.getBoolean(Prefs.OV_LOCK, false)) return true
+                    val moved = Math.abs(p.x - startX) + Math.abs(p.y - startY) > 4
+                    if (moved && prefs.getBoolean(Prefs.OV_SNAP, true)) snap(v, p) else {
+                        prefs.edit().putInt(Prefs.OVERLAY_X, p.x).putInt(Prefs.OVERLAY_Y, p.y).apply()
+                    }
                 }
             }
             return true

@@ -69,7 +69,7 @@ object SlowNet {
             c, ID, Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        nm.notify(ID, Notification.Builder(c, CHANNEL)
+        nm.notify(ID, Notification.Builder(c, Quiet.channel(c, CHANNEL))
             .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle("Mobil internet yavaş")
             .setContentText(text)
