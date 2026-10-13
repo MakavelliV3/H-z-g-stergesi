@@ -211,6 +211,19 @@ class SettingsActivity : Activity() {
 
     // ---------- Paket ----------
 
+    private fun parseGb(s: String): Double? = s.replace(',', '.').trim().toDoubleOrNull()?.takeIf { it <= 10_000 }
+
+    private fun gbField(hintText: String) = EditText(this).apply {
+        hint = hintText
+        isSingleLine = true
+        textSize = 15f
+        inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        setTextColor(Ui.primary(context))
+        setHintTextColor(Ui.secondary(context))
+        setPadding(dp(14), dp(10), dp(14), dp(10))
+        background = Ui.rounded(Color.TRANSPARENT, dp(50).toFloat(), dp(1), Ui.outline(context))
+    }
+
     private fun refreshPlan() {
         val ctx = applicationContext
         Thread { try { PlanState.compute(ctx) } catch (e: Exception) { } }.start()
@@ -268,6 +281,58 @@ class SettingsActivity : Activity() {
             })
             addView(Ui.hint(ctx, "Paketin her ay hangi gün yenileniyor? 29-31 seçilirse o günü olmayan aylarda ayın son günü sayılır."))
         })
+        root.addView(Ui.card(ctx, "Operatörle eşitle", "🔄").apply {
+            addView(Ui.hint(ctx, "Operatör SMS'le ya da uygulamasında \"kalan 3,2 GB\" diyorsa o rakamı yaz: uygulama kendini ona göre düzeltir ve oradan saymaya devam eder. Düzeltme sadece bu dönem için geçerli."))
+            val input = gbField("Operatörün söylediği kalan (GB)")
+            val row = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            row.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { rightMargin = dp(8); topMargin = dp(8) })
+            row.addView(Ui.button(ctx, "Eşitle") {
+                val gb = parseGb(input.text.toString())
+                if (gb == null || gb < 0) {
+                    toast("Geçerli bir GB değeri yaz")
+                } else {
+                    val app = applicationContext
+                    Thread {
+                        PlanState.calibrate(app, (gb * Fmt.base * Fmt.base * Fmt.base).toLong())
+                        runOnUiThread { toast("Eşitlendi: kalan ${Fmt.bytes((gb * Fmt.base * Fmt.base * Fmt.base).toLong())}") }
+                    }.start()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+            addView(row)
+            if (PlanState.last?.calibrated == true) {
+                addView(Ui.button(ctx, "Eşitlemeyi kaldır") {
+                    prefs.edit().putLong(Prefs.PLAN_OFFSET, 0L).apply()
+                    refreshPlan()
+                    toast("Eşitleme kaldırıldı")
+                    recreate()
+                })
+            }
+        })
+        root.addView(Ui.card(ctx, "Ek paket", "➕").apply {
+            addView(Ui.hint(ctx, "Dönem ortasında ek GB aldıysan buradan ekle; sadece bu döneme eklenir, yenilenince sıfırlanır."))
+            val extra = PlanState.last?.extra ?: 0L
+            if (extra > 0) addView(Ui.text(ctx, "Bu dönem eklenen: ${Fmt.bytes(extra)}", 14f, color = Ui.accentText(ctx)))
+            addView(Ui.choiceRow(ctx, listOf("+1 GB" to 1, "+2 GB" to 2, "+3 GB" to 3, "+5 GB" to 5, "+10 GB" to 10, "+20 GB" to 20), -1) { gb ->
+                val app = applicationContext
+                Thread {
+                    PlanState.addExtra(app, Fmt.mbToBytes(gb * 1024))
+                    runOnUiThread {
+                        toast("$gb GB eklendi")
+                        recreate()
+                    }
+                }.start()
+            })
+            if (extra > 0) {
+                addView(Ui.button(ctx, "Ek paketi sıfırla") {
+                    prefs.edit().putLong(Prefs.PLAN_EXTRA, 0L).apply()
+                    refreshPlan()
+                    recreate()
+                })
+            }
+        })
         root.addView(Ui.card(ctx, "Gece paketi", "🌙").apply {
             addView(Ui.hint(ctx, "Operatörün gece saatleri için ayrı bir paketi varsa, bu saatlerdeki mobil kullanım ana paketten düşülmez."))
             addView(Ui.switch(ctx, "Gece saatlerini ayrı say", prefs.getBoolean(Prefs.PLAN_NIGHT, false)) {
@@ -287,6 +352,7 @@ class SettingsActivity : Activity() {
         root.addView(Ui.card(ctx, "Uyarı ve gösterim", "🔔").apply {
             addView(Ui.switch(ctx, "%80 ve %100'e gelince bildir", prefs.getBoolean(Prefs.PLAN_ALERTS, true)) { put(Prefs.PLAN_ALERTS, it) })
             addView(Ui.switch(ctx, "Bildirim panelinde paket satırı", prefs.getBoolean(Prefs.N_LINE_PLAN, true)) { put(Prefs.N_LINE_PLAN, it) })
+            addView(Ui.switch(ctx, "Dönem bitince özet bildirimi", prefs.getBoolean(Prefs.PLAN_SUMMARY_ON, true)) { put(Prefs.PLAN_SUMMARY_ON, it) })
             addView(Ui.hint(ctx, "\"Kullanım erişimi\" izni varsa dönem başından bu yana tüm kullanım (kurulumdan öncesi dahil) Android'in kayıtlarından okunur."))
         })
     }
@@ -351,6 +417,7 @@ class SettingsActivity : Activity() {
         root.addView(Ui.card(ctx, "Otomatik bildirimler", "📬").apply {
             addView(Ui.switch(ctx, "Haftalık özet (pazartesi sabahı)", prefs.getBoolean(Prefs.WEEKLY_ON, true)) { put(Prefs.WEEKLY_ON, it) })
             addView(Ui.switch(ctx, "Olağandışı kullanım uyarısı", prefs.getBoolean(Prefs.ANOMALY_ON, true)) { put(Prefs.ANOMALY_ON, it) })
+            addView(Ui.switch(ctx, "Roaming (yurt dışı) uyarısı", prefs.getBoolean(Prefs.ROAM_ON, true)) { put(Prefs.ROAM_ON, it) })
             addView(Ui.switch(ctx, "Yavaş mobil internet uyarısı", prefs.getBoolean(Prefs.SLOW_ON, false)) { put(Prefs.SLOW_ON, it) })
             addView(Ui.choiceRow(ctx, listOf("0,5 Mbps" to 500, "1 Mbps" to 1000, "2 Mbps" to 2000, "5 Mbps" to 5000),
                 prefs.getInt(Prefs.SLOW_KBPS, 1000)) { put(Prefs.SLOW_KBPS, it) })

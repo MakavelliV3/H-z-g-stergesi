@@ -108,4 +108,21 @@ class PlanMathTest {
         assertEquals(100, PlanMath.alertLevel(100, 100))
         assertEquals(0, PlanMath.alertLevel(500, 0))
     }
+
+    @Test
+    fun operatorCalibration() {
+        val limit = 10_000L
+        // Uygulama 4000 ölçtü, operatör 5000 kaldı diyor → kullanılan 5000 olmalı
+        val off = PlanMath.offsetFor(limit, 5_000, 4_000)
+        assertEquals(1_000L, off)
+        assertEquals(5_000L, PlanMath.adjusted(4_000, off))
+        // Sonra 500 daha kullanılınca
+        assertEquals(5_500L, PlanMath.adjusted(4_500, off))
+        // Operatör daha az kullanım diyorsa düzeltme eksi olabilir, kullanım eksiye düşmez
+        val neg = PlanMath.offsetFor(limit, 9_000, 4_000)
+        assertEquals(-3_000L, neg)
+        assertEquals(0L, PlanMath.adjusted(1_000, neg))
+        // Kalan, paketten büyük yazılırsa sınırlanır
+        assertEquals(-4_000L, PlanMath.offsetFor(limit, 50_000, 4_000))
+    }
 }

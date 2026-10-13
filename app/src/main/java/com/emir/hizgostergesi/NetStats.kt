@@ -77,6 +77,23 @@ object NetStats {
         return list
     }
 
+    /** Hotspot (internet paylaşımı) ile mobil veriden giden toplam. */
+    fun tethering(c: Context, start: Long, end: Long): Long {
+        val nsm = c.getSystemService(NetworkStatsManager::class.java)
+        var sum = 0L
+        try {
+            val stats = nsm.querySummary(MOBILE, null, start, end)
+            val b = NetworkStats.Bucket()
+            while (stats.hasNextBucket()) {
+                stats.getNextBucket(b)
+                if (b.uid == NetworkStats.Bucket.UID_TETHERING) sum += b.rxBytes + b.txBytes
+            }
+            stats.close()
+        } catch (e: Exception) {
+        }
+        return sum
+    }
+
     /** Cihazın toplam mobil ve Wi-Fi kullanımı. */
     fun deviceTotal(c: Context, start: Long, end: Long): Pair<Long, Long> {
         val nsm = c.getSystemService(NetworkStatsManager::class.java)

@@ -80,6 +80,16 @@ object PlanMath {
         else -> hour >= start || hour < end
     }
 
+    /**
+     * Operatörle eşitleme: kullanıcının girdiği "kalan" değerinden ölçüme eklenecek düzeltme.
+     * Sonraki ölçümler bu düzeltmeyle devam eder (kullanılan = ölçülen + düzeltme).
+     */
+    fun offsetFor(limit: Long, operatorRemaining: Long, measured: Long): Long =
+        (limit - operatorRemaining.coerceIn(0, limit)) - measured
+
+    /** Düzeltme uygulanmış kullanım (eksiye düşmez). */
+    fun adjusted(measured: Long, offset: Long): Long = (measured + offset).coerceAtLeast(0)
+
     /** Uyarı seviyesi: 0 (yok), 80, 100. */
     fun alertLevel(used: Long, limit: Long): Int = when {
         limit <= 0 -> 0

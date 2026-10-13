@@ -20,7 +20,10 @@ object PlanState {
         val night: Long,         // gece paketi saatlerindeki mobil kullanım
         val limit: Long,
         val fromSystem: Boolean, // Android kayıtlarından mı (true) yoksa uygulamanın kendi ölçümünden mi
-        val at: Long
+        val at: Long,
+        val hotspot: Long = 0,   // bu dönem hotspot ile paylaşılan mobil veri (sistem kaydı varsa)
+        val extra: Long = 0,     // dönem içinde eklenen ek paket
+        val calibrated: Boolean = false
     ) {
         val remaining get() = (limit - used).coerceAtLeast(0)
         val ratio get() = if (limit > 0) used.toDouble() / limit else 0.0
@@ -32,6 +35,8 @@ object PlanState {
 
     private const val CHANNEL = "paket"
     private const val NOTIF_ID = 5
+    private const val SUMMARY_CHANNEL = "donem_ozeti"
+    private const val SUMMARY_ID = 6
 
     fun enabled(c: Context): Boolean {
         val p = Prefs.get(c)
@@ -49,17 +54,93 @@ object PlanState {
         val day = p.getInt(Prefs.PLAN_DAY, 1)
         val start = PlanMath.cycleStart(now, day)
         val end = PlanMath.cycleEnd(start, day)
+        checkCycleEnd(c, start)
         val system = NetStats.hasAccess(c)
-        // Android kayıtları genelde daha eksiksizdir; yine de hangisi büyükse o alınır (eksik kayda karşı)
-        val own = StatsStore.sumRange(c, start, now).first
-        val mobile = if (system) maxOf(NetStats.deviceTotal(c, start, now).first, own) else own
         val night = if (p.getBoolean(Prefs.PLAN_NIGHT, false)) {
             StatsStore.nightMobile(c, start, now, p.getInt(Prefs.NIGHT_START, 0), p.getInt(Prefs.NIGHT_END, 8))
         } else 0L
-        val snap = Snapshot(start, end, (mobile - night).coerceAtLeast(0), night, Fmt.mbToBytes(p.getInt(Prefs.PLAN_MB, 0)), system, now)
+        val measured = measure(c, start, now, system, night)
+        // Operatörle eşitleme ve ek paket sadece girildikleri dönemde geçerli
+        val offset = if (p.getLong(Prefs.PLAN_OFFSET_CYCLE, 0L) == start) p.getLong(Prefs.PLAN_OFFSET, 0L) else 0L
+        val extra = if (p.getLong(Prefs.PLAN_EXTRA_CYCLE, 0L) == start) p.getLong(Prefs.PLAN_EXTRA, 0L) else 0L
+        val hotspot = if (system) NetStats.tethering(c, start, now) else 0L
+        val snap = Snapshot(
+            start, end, PlanMath.adjusted(measured, offset), night,
+            Fmt.mbToBytes(p.getInt(Prefs.PLAN_MB, 0)) + extra, system, now, hotspot, extra, offset != 0L
+        )
         last = snap
         checkAlerts(c, snap)
         return snap
+    }
+
+    /** Pakete sayılan ham ölçüm (düzeltmesiz): mobil kullanım eksi gece paketi. */
+    private fun measure(c: Context, start: Long, now: Long, system: Boolean, night: Long): Long {
+        // Android kayıtları genelde daha eksiksizdir; yine de hangisi büyükse o alınır (eksik kayda karşı)
+        val own = StatsStore.sumRange(c, start, now).first
+        val mobile = if (system) maxOf(NetStats.deviceTotal(c, start, now).first, own) else own
+        return (mobile - night).coerceAtLeast(0)
+    }
+
+    /** Operatörün söylediği kalan miktara göre eşitler. Ana thread dışında çağrılmalı. */
+    fun calibrate(c: Context, operatorRemaining: Long) {
+        val p = Prefs.get(c)
+        val now = System.currentTimeMillis()
+        val day = p.getInt(Prefs.PLAN_DAY, 1)
+        val start = PlanMath.cycleStart(now, day)
+        val night = if (p.getBoolean(Prefs.PLAN_NIGHT, false)) {
+            StatsStore.nightMobile(c, start, now, p.getInt(Prefs.NIGHT_START, 0), p.getInt(Prefs.NIGHT_END, 8))
+        } else 0L
+        val measured = measure(c, start, now, NetStats.hasAccess(c), night)
+        val extra = if (p.getLong(Prefs.PLAN_EXTRA_CYCLE, 0L) == start) p.getLong(Prefs.PLAN_EXTRA, 0L) else 0L
+        val limit = Fmt.mbToBytes(p.getInt(Prefs.PLAN_MB, 0)) + extra
+        p.edit().putLong(Prefs.PLAN_OFFSET, PlanMath.offsetFor(limit, operatorRemaining, measured))
+            .putLong(Prefs.PLAN_OFFSET_CYCLE, start).putString(Prefs.PLAN_WARNED, "").apply()
+        compute(c)
+    }
+
+    /** Bu döneme ek paket ekler (aynı dönemde birden çok kez eklenebilir). */
+    fun addExtra(c: Context, bytes: Long) {
+        val p = Prefs.get(c)
+        val start = PlanMath.cycleStart(System.currentTimeMillis(), p.getInt(Prefs.PLAN_DAY, 1))
+        val cur = if (p.getLong(Prefs.PLAN_EXTRA_CYCLE, 0L) == start) p.getLong(Prefs.PLAN_EXTRA, 0L) else 0L
+        p.edit().putLong(Prefs.PLAN_EXTRA, (cur + bytes).coerceAtLeast(0)).putLong(Prefs.PLAN_EXTRA_CYCLE, start)
+            .putString(Prefs.PLAN_WARNED, "").apply()
+        compute(c)
+    }
+
+    /** Yeni döneme geçildiyse biten dönemin özetini bir kez bildirir. */
+    private fun checkCycleEnd(c: Context, start: Long) {
+        val p = Prefs.get(c)
+        val prev = p.getLong(Prefs.PLAN_LAST_CYCLE, 0L)
+        if (prev == start) return
+        p.edit().putLong(Prefs.PLAN_LAST_CYCLE, start).apply()
+        if (prev == 0L || prev > start || !p.getBoolean(Prefs.PLAN_SUMMARY_ON, true)) return
+        try {
+            val system = NetStats.hasAccess(c)
+            val own = StatsStore.sumRange(c, prev, start).first
+            val used = if (system) maxOf(NetStats.deviceTotal(c, prev, start).first, own) else own
+            val limitMb = p.getInt(Prefs.PLAN_MB, 0)
+            val top = if (system) NetStats.queryApps(c, prev, start).filter { it.mobile > 0 }.maxByOrNull { it.mobile } else null
+            val text = buildString {
+                append("Bu dönem ${Fmt.bytes(used)} mobil veri kullandın")
+                if (limitMb > 0) append(" (paket ${Fmt.mb(limitMb)})")
+                append(".")
+                if (top != null && top.name.isNotEmpty()) append(" En çok ${top.name}: ${Fmt.bytes(top.mobile)}.")
+                append(" Yeni dönem başladı.")
+            }
+            val nm = c.getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(NotificationChannel(SUMMARY_CHANNEL, "Dönem sonu özeti", NotificationManager.IMPORTANCE_DEFAULT))
+            nm.notify(SUMMARY_ID, Notification.Builder(c, SUMMARY_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat)
+                .setContentTitle("Paket dönemi bitti")
+                .setContentText(text)
+                .setStyle(Notification.BigTextStyle().bigText(text))
+                .setContentIntent(PendingIntent.getActivity(c, SUMMARY_ID,
+                    Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE))
+                .setAutoCancel(true)
+                .build())
+        } catch (e: Exception) {
+        }
     }
 
     /** %80 ve %100'de, her dönem bir kez bildirim. */

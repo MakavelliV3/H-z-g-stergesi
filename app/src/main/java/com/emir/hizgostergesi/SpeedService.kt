@@ -188,6 +188,7 @@ class SpeedService : Service() {
     }
 
     private val slow = SlowDetector(125_000L)
+    private var roamWarned = false
 
     private fun update() {
         val nowEl = SystemClock.elapsedRealtime()
@@ -229,6 +230,21 @@ class SpeedService : Service() {
         if (!lastInteractive) today.screenOff += dTotRx + dTotTx
         lastInteractive = interactive
         StatsStore.save(this)
+
+        // Roaming: hat dolaşıma girince bir kez uyar
+        if (ConnInfo.roaming) {
+            if (!roamWarned && prefs.getBoolean(Prefs.ROAM_ON, true)) {
+                roamWarned = true
+                nm.notify(ROAM_ID, Notification.Builder(this, WARN_CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_stat)
+                    .setContentTitle("Roaming'e geçildi")
+                    .setContentText("Mobil veri dolaşımda; ücretli olabilir. Gerekmiyorsa mobil veriyi kapat.")
+                    .setContentIntent(PendingIntent.getActivity(this, ROAM_ID,
+                        Intent(Settings.ACTION_DATA_ROAMING_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE))
+                    .setAutoCancel(true)
+                    .build())
+            }
+        } else roamWarned = false
 
         // Yavaş mobil internet uyarısı (ekran açıkken)
         if (prefs.getBoolean(Prefs.SLOW_ON, false)) {
@@ -708,6 +724,7 @@ class SpeedService : Service() {
         const val WARN_CHANNEL_ID = "uyari"
         const val NOTIF_ID = 1
         const val WARN_ID = 2
+        const val ROAM_ID = 7
         const val ACTION_RESET = "com.emir.hizgostergesi.RESET"
         const val ACTION_TOGGLE_OVERLAY = "com.emir.hizgostergesi.TOGGLE_OVERLAY"
         const val ACTION_RESET_ROLL = "com.emir.hizgostergesi.RESET_ROLL"

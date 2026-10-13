@@ -34,6 +34,10 @@ object ConnInfo {
     @Volatile
     var cellular = false
 
+    /** Mobil hat yurt dışında/başka operatörde dolaşımda mı. */
+    @Volatile
+    var roaming = false
+
     private var cellType = 0
     private var cellOverride = 0
     private var netCallback: ConnectivityManager.NetworkCallback? = null
@@ -122,6 +126,7 @@ object ConnInfo {
         vpn = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
         cellular = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
             !caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+        roaming = cellular && !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING)
         var l: String
         val k: String
         when {
@@ -142,6 +147,7 @@ object ConnInfo {
                 l = ""
             }
         }
+        if (roaming) l = "$l · Roaming"
         if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) l = if (l.isEmpty()) "VPN" else "$l · VPN"
         label = l
         kind = k

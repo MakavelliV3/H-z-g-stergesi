@@ -277,7 +277,18 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         if (s.night > 0 || prefs.getBoolean(Prefs.PLAN_NIGHT, false)) {
             card.addView(Ui.hint(a, "🌙 Gece paketi saatlerinde ${Fmt.bytes(s.night)} kullanıldı (paketten düşülmedi)."))
         }
+        if (s.hotspot > 0) card.addView(Ui.hint(a, "Hotspot ile paylaşılan: ${Fmt.bytes(s.hotspot)} (pakete dahil)."))
+        if (s.extra > 0) card.addView(Ui.hint(a, "Bu dönem ${Fmt.bytes(s.extra)} ek paket eklendi."))
+        if (s.calibrated) card.addView(Ui.hint(a, "Operatörün söylediği kalan miktara göre eşitlendi."))
         if (!s.fromSystem) card.addView(Ui.hint(a, "Not: \"Kullanım erişimi\" izni olmadığı için sadece uygulama kurulduktan sonraki kullanım sayılıyor."))
+        card.addView(LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(Ui.button(a, "Operatörle eşitle") { open() }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                topMargin = dp(10)
+                rightMargin = dp(8)
+            })
+            addView(Ui.button(a, "Ek paket") { open() }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { topMargin = dp(10) })
+        })
         planBox.addView(card)
     }
 
