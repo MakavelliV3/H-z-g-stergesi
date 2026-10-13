@@ -26,6 +26,10 @@ import java.util.TreeMap
 /** Bir ayar kategorisinin sayfası. Hangi kategori olduğu [EXTRA_CATEGORY] ile gelir. */
 class SettingsActivity : Activity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(Themes.wrap(newBase))
+    }
+
     companion object {
         const val EXTRA_CATEGORY = "kategori"
         const val CAT_STATUS = "durum"
@@ -423,8 +427,29 @@ class SettingsActivity : Activity() {
 
     private fun look(root: LinearLayout) {
         val ctx = this
-        root.addView(Ui.card(ctx, "Tema ve birimler", "🎨").apply {
-            if (Build.VERSION.SDK_INT >= 31) {
+        root.addView(Ui.card(ctx, "Tema", "🌗").apply {
+            val current = Themes.current(ctx)
+            val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+            (0 until 4).chunked(2).forEach { pair ->
+                val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+                pair.forEach { t ->
+                    row.addView(themeTile(t, t == current), LinearLayout.LayoutParams(0, dp(112), 1f).apply {
+                        setMargins(dp(4), dp(4), dp(4), dp(4))
+                    })
+                }
+                grid.addView(row)
+            }
+            addView(grid)
+            if (current != Themes.SYSTEM) {
+                addView(Ui.switch(ctx, "Telefon açık temadayken de karanlık kalsın", prefs.getBoolean(Prefs.FORCE_DARK, true)) {
+                    put(Prefs.FORCE_DARK, it)
+                    applyTheme()
+                })
+                addView(Ui.hint(ctx, "Kapalıysa telefonun açık temasında bu temanın açık hâli kullanılır."))
+            }
+        })
+        root.addView(Ui.card(ctx, "Renkler ve birimler", "🎨").apply {
+            if (Build.VERSION.SDK_INT >= 31 && Themes.current(ctx) == Themes.SYSTEM) {
                 addView(Ui.switch(ctx, "Material You (duvar kâğıdı renkleri)", prefs.getBoolean(Prefs.DYNAMIC_COLOR, true)) {
                     put(Prefs.DYNAMIC_COLOR, it)
                     Ui.init(ctx)
@@ -607,6 +632,52 @@ class SettingsActivity : Activity() {
                 if (requestCode == REQ_RESTORE && !isFinishing) recreate()
             }
         }.start()
+    }
+
+    private fun applyTheme() {
+        Ui.init(this)
+        recreate()
+    }
+
+    /** Temanın küçük önizlemesi: zemin, kart, vurgu çizgisi ve adı. */
+    private fun themeTile(t: Int, selected: Boolean): View {
+        val p = Themes.preview(t) ?: Palette(
+            0xFF0E1014.toInt(), 0xFF1A1D24.toInt(), 0xFFF1F3F7.toInt(), 0xFF9AA1AD.toInt(), 0xFF2C313B.toInt(),
+            Ui.ACCENT, Ui.ACCENT_2, 0xFF9DBBFF.toInt(), Color.WHITE
+        )
+        val r = dp(18).toFloat()
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(10))
+            background = Ui.ripple(Ui.rounded(p.bg, r, if (selected) dp(2) else dp(1), if (selected) Ui.ACCENT else Ui.outline(this@SettingsActivity)))
+            isClickable = true
+            contentDescription = Themes.NAMES[t]
+            setOnClickListener {
+                if (selected) return@setOnClickListener
+                it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                put(Prefs.THEME, t)
+                applyTheme()
+            }
+            // mini kart: gösterge yayı ve iki satır
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(10), dp(8), dp(10), dp(8))
+                background = Ui.rounded(p.surface, dp(10).toFloat())
+                addView(View(context).apply { background = Ui.rounded(p.accent, dp(3).toFloat()) },
+                    LinearLayout.LayoutParams(dp(46), dp(6)))
+                addView(View(context).apply { background = Ui.rounded(p.secondary and 0x66FFFFFF, dp(3).toFloat()) },
+                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(5)).apply { topMargin = dp(7) })
+                addView(View(context).apply { background = Ui.rounded(p.secondary and 0x66FFFFFF, dp(3).toFloat()) },
+                    LinearLayout.LayoutParams(dp(60), dp(5)).apply { topMargin = dp(5) })
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(TextView(context).apply {
+                text = (if (selected) "✓ " else "") + Themes.NAMES[t]
+                textSize = 13f
+                typeface = Ui.MEDIUM
+                setTextColor(p.primary)
+                setPadding(dp(2), dp(8), 0, 0)
+            })
+        }
     }
 
     // ---------- Önizleme ve renk ----------

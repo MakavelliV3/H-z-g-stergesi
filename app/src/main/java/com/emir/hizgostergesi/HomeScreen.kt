@@ -112,13 +112,23 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     private fun heroCard(): View = LinearLayout(a).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(18), dp(18), dp(18), dp(14))
-        background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Ui.ACCENT, Ui.ACCENT_2))
+        // Hazır temalarda koyu kart üstünde renkli gösterge, sistem temasında renkli degrade kart
+        val themed = Ui.themed()
+        val fg = if (themed) Ui.primary(a) else Color.WHITE
+        val muted = if (themed) Ui.secondary(a) else 0xB3FFFFFF.toInt()
+        background = if (themed) Ui.rounded(Ui.surface(a), dp(28).toFloat(), dp(1), Ui.outline(a))
+        else GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Ui.ACCENT, Ui.ACCENT_2))
             .apply { cornerRadius = dp(28).toFloat() }
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(12) }
 
-        gauge = SpeedGauge(a)
+        gauge = SpeedGauge(a).apply {
+            colorful = themed
+            this.fg = fg
+            this.muted = muted
+            if (themed) track = Ui.outline(a)
+        }
         addView(gauge, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             leftMargin = dp(24)
             rightMargin = dp(24)
@@ -126,13 +136,13 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         upText = TextView(a).apply {
             textSize = 15f
             typeface = Ui.MEDIUM
-            setTextColor(0xE6FFFFFF.toInt())
+            setTextColor(if (themed) Ui.secondary(a) else 0xE6FFFFFF.toInt())
             gravity = Gravity.CENTER
         }
         addView(upText)
-        spark = Sparkline(a)
+        spark = Sparkline(a).apply { if (themed) lineColor = Ui.ACCENT }
         addView(spark, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)).apply { topMargin = dp(10) })
-        addView(Ui.text(a, "Son 60 saniye", 12f, topDp = 4, color = 0xB3FFFFFF.toInt()).apply { gravity = Gravity.CENTER })
+        addView(Ui.text(a, "Son 60 saniye", 12f, topDp = 4, color = muted).apply { gravity = Gravity.CENTER })
     }
 
     private fun openSettings(cat: String) {
@@ -316,7 +326,11 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
-            addView(Ui.text(a, icon, 20f).apply { setPadding(0, 0, dp(12), 0) })
+            addView(TextView(a).apply {
+                textSize = 22f
+                Icons.apply(this, icon, Ui.accentText(a))
+                setPadding(0, 0, dp(12), 0)
+            })
             val texts = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
             texts.addView(Ui.text(a, title, 14f).apply {
                 typeface = Ui.MEDIUM
@@ -339,7 +353,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                     this.text = action
                     textSize = 13f
                     typeface = Ui.MEDIUM
-                    setTextColor(Color.WHITE)
+                    setTextColor(Ui.ON_ACCENT)
                     setPadding(dp(14), dp(8), dp(14), dp(8))
                     background = Ui.ripple(Ui.rounded(Ui.ACCENT, dp(50).toFloat()))
                     isClickable = true

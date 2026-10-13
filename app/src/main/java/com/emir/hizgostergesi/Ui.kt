@@ -29,8 +29,6 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Switch
@@ -43,15 +41,31 @@ import android.widget.TextView
 object Ui {
     var ACCENT = 0xFF4F8CFF.toInt()
     var ACCENT_2 = 0xFF7B5CFF.toInt()
+    /** Vurgu renginin üstündeki yazı rengi (açık vurgu renklerinde koyu). */
+    var ON_ACCENT = Color.WHITE
     private var dynamic = false
+    private var theme = Themes.SYSTEM
+
+    /** Hazır temanın şu anki (açık/koyu) renk takımı; sistem temasında null. */
+    private fun pal(c: Context): Palette? = if (theme == Themes.SYSTEM) null else Themes.palette(theme, night(c))
+
+    /** Hazır tema mı (gösterge kartı gibi yerler buna göre çizilir). */
+    fun themed() = theme != Themes.SYSTEM
 
     val MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
     /** Uygulama açılışında ve tema değişince çağrılır. */
     fun init(c: Context) {
         Fmt.base = if (Prefs.get(c).getInt(Prefs.UNIT_BASE, 1000) == 1024) 1024L else 1000L
-        dynamic = Build.VERSION.SDK_INT >= 31 && Prefs.get(c).getBoolean(Prefs.DYNAMIC_COLOR, true)
-        if (dynamic && Build.VERSION.SDK_INT >= 31) {
+        theme = Prefs.get(c).getInt(Prefs.THEME, Themes.SYSTEM)
+        dynamic = theme == Themes.SYSTEM && Build.VERSION.SDK_INT >= 31 && Prefs.get(c).getBoolean(Prefs.DYNAMIC_COLOR, true)
+        ON_ACCENT = Color.WHITE
+        val p = pal(c)
+        if (p != null) {
+            ACCENT = p.accent
+            ACCENT_2 = p.accent2
+            ON_ACCENT = p.onAccent
+        } else if (dynamic && Build.VERSION.SDK_INT >= 31) {
             ACCENT = c.getColor(android.R.color.system_accent1_600)
             ACCENT_2 = c.getColor(android.R.color.system_accent3_500)
         } else {
@@ -68,26 +82,26 @@ object Ui {
     fun night(c: Context) =
         (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
-    fun bg(c: Context) = if (night(c)) sys(c, android.R.color.system_neutral1_900, 0xFF0E1014.toInt())
+    fun bg(c: Context) = pal(c)?.bg ?: if (night(c)) sys(c, android.R.color.system_neutral1_900, 0xFF0E1014.toInt())
     else sys(c, android.R.color.system_neutral1_50, 0xFFF2F3F7.toInt())
 
-    fun surface(c: Context) = if (night(c)) sys(c, android.R.color.system_neutral1_800, 0xFF1A1D24.toInt())
+    fun surface(c: Context) = pal(c)?.surface ?: if (night(c)) sys(c, android.R.color.system_neutral1_800, 0xFF1A1D24.toInt())
     else sys(c, android.R.color.system_neutral1_10, 0xFFFFFFFF.toInt())
 
-    fun primary(c: Context) = if (night(c)) sys(c, android.R.color.system_neutral1_50, 0xFFF1F3F7.toInt())
+    fun primary(c: Context) = pal(c)?.primary ?: if (night(c)) sys(c, android.R.color.system_neutral1_50, 0xFFF1F3F7.toInt())
     else sys(c, android.R.color.system_neutral1_900, 0xFF15171C.toInt())
 
-    fun secondary(c: Context) = if (night(c)) sys(c, android.R.color.system_neutral2_200, 0xFF9AA1AD.toInt())
+    fun secondary(c: Context) = pal(c)?.secondary ?: if (night(c)) sys(c, android.R.color.system_neutral2_200, 0xFF9AA1AD.toInt())
     else sys(c, android.R.color.system_neutral2_600, 0xFF5E6573.toInt())
 
-    fun outline(c: Context) = if (night(c)) sys(c, android.R.color.system_neutral2_700, 0xFF2C313B.toInt())
+    fun outline(c: Context) = pal(c)?.outline ?: if (night(c)) sys(c, android.R.color.system_neutral2_700, 0xFF2C313B.toInt())
     else sys(c, android.R.color.system_neutral2_100, 0xFFDDE0E6.toInt())
 
     /**
      * Yazı ve simgeler için vurgu rengi: koyu temada daha açık tonu kullanılır,
      * yoksa koyu zemin üstünde koyu mavi okunmaz.
      */
-    fun accentText(c: Context): Int = if (night(c)) {
+    fun accentText(c: Context): Int = pal(c)?.accentText ?: if (night(c)) {
         if (dynamic && Build.VERSION.SDK_INT >= 31) c.getColor(android.R.color.system_accent1_200) else 0xFF9DBBFF.toInt()
     } else ACCENT
 
@@ -112,6 +126,7 @@ object Ui {
      */
     /** Pencereyi kenardan kenara, doğru durum çubuğu renkleriyle hazırlar. */
     fun setupWindow(a: Activity) {
+        init(a)
         a.actionBar?.hide()
         a.window.decorView.setBackgroundColor(bg(a))
         if (Build.VERSION.SDK_INT >= 30) {
@@ -149,6 +164,7 @@ object Ui {
     }
 
     fun page(a: Activity): Pair<ScrollView, LinearLayout> {
+        init(a)
         a.actionBar?.hide()
         val p = dp(a, 16)
         val root = LinearLayout(a).apply {
@@ -246,9 +262,9 @@ object Ui {
                 }
                 if (icon != null) {
                     head.addView(TextView(c).apply {
-                        text = icon
-                        textSize = 16f
+                        textSize = 20f
                         gravity = Gravity.CENTER
+                        Icons.apply(this, icon, accentText(c))
                         background = rounded(accentSoft(), dp(c, 18).toFloat())
                     }, LinearLayout.LayoutParams(dp(c, 36), dp(c, 36)).apply { rightMargin = dp(c, 12) })
                 }
@@ -291,7 +307,7 @@ object Ui {
         textSize = 15f
         typeface = MEDIUM
         gravity = Gravity.CENTER
-        setTextColor(if (filled) Color.WHITE else accentText(c))
+        setTextColor(if (filled) ON_ACCENT else accentText(c))
         val v = dp(c, 13)
         setPadding(v, v, v, v)
         background = ripple(rounded(if (filled) ACCENT else accentSoft(), dp(c, 50).toFloat()))
@@ -302,39 +318,37 @@ object Ui {
         ).apply { topMargin = dp(c, 10) }
     }
 
-    /** Seçenekler hap düğmeler olarak; sığmazsa yatay kayar. */
+    /** Seçenekler hap düğmeler olarak; sığmazsa alt satıra geçer. */
     fun <T> choiceRow(c: Context, options: List<Pair<String, T>>, current: T, onPick: (T) -> Unit): View {
-        val group = RadioGroup(c).apply { orientation = RadioGroup.HORIZONTAL }
+        val flow = FlowLayout(c, dp(c, 8), dp(c, 8)).apply { setPadding(0, dp(c, 4), 0, dp(c, 6)) }
         val radius = dp(c, 50).toFloat()
+        val selected = arrayOf(android.R.attr.state_selected)
+        val chips = ArrayList<TextView>()
         options.forEach { (label, value) ->
-            val chip = RadioButton(c).apply {
-                id = View.generateViewId()
+            val chip = TextView(c).apply {
                 text = label
                 textSize = 14f
                 typeface = MEDIUM
-                buttonDrawable = null
                 gravity = Gravity.CENTER
                 setPadding(dp(c, 15), dp(c, 9), dp(c, 15), dp(c, 9))
-                background = StateListDrawable().apply {
-                    addState(intArrayOf(android.R.attr.state_checked), rounded(ACCENT, radius))
+                background = RippleDrawable(ColorStateList.valueOf(0x33808080), StateListDrawable().apply {
+                    addState(selected.toIntArray(), rounded(ACCENT, radius))
                     addState(intArrayOf(), rounded(Color.TRANSPARENT, radius, dp(c, 1), outline(c)))
-                }
-                setTextColor(ColorStateList(checkedStates, intArrayOf(Color.WHITE, primary(c))))
-                isChecked = value == current
-                setOnClickListener {
-                    it.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                }, rounded(Color.WHITE, radius))
+                setTextColor(ColorStateList(arrayOf(selected.toIntArray(), intArrayOf()), intArrayOf(ON_ACCENT, primary(c))))
+                isSelected = value == current
+                isClickable = true
+                setOnClickListener { v ->
+                    if (v.isSelected) return@setOnClickListener
+                    v.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    chips.forEach { it.isSelected = it === v }
                     onPick(value)
                 }
             }
-            group.addView(chip, RadioGroup.LayoutParams(
-                RadioGroup.LayoutParams.WRAP_CONTENT, RadioGroup.LayoutParams.WRAP_CONTENT
-            ).apply { rightMargin = dp(c, 8) })
+            chips += chip
+            flow.addView(chip)
         }
-        return HorizontalScrollView(c).apply {
-            isHorizontalScrollBarEnabled = false
-            setPadding(0, dp(c, 2), 0, dp(c, 4))
-            addView(group)
-        }
+        return flow
     }
 
     fun switch(c: Context, label: String, checked: Boolean, onChange: (Boolean) -> Unit) = Switch(c).apply {
@@ -399,9 +413,9 @@ object Ui {
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(c, 8), dp(c, 18), dp(c, 8), dp(c, 12))
             addView(TextView(c).apply {
-                this.text = icon
-                textSize = 30f
+                textSize = 32f
                 gravity = Gravity.CENTER
+                Icons.apply(this, icon, accentText(c))
                 background = rounded(accentSoft(), dp(c, 32).toFloat())
             }, LinearLayout.LayoutParams(dp(c, 64), dp(c, 64)).apply { bottomMargin = dp(c, 12) })
             addView(text(c, title, 16f).apply {
@@ -477,9 +491,9 @@ object Ui {
             isClickable = true
             setOnClickListener { onClick() }
             addView(TextView(c).apply {
-                text = icon
-                textSize = 18f
+                textSize = 22f
                 gravity = Gravity.CENTER
+                Icons.apply(this, icon, accentText(c))
                 background = rounded(accentSoft(), dp(c, 20).toFloat())
             }, LinearLayout.LayoutParams(dp(c, 40), dp(c, 40)).apply { rightMargin = dp(c, 14) })
             val texts = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }

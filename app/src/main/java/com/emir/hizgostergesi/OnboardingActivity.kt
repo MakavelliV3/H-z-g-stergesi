@@ -18,6 +18,10 @@ import android.widget.TextView
 /** İlk açılışta izinleri adım adım isteyen kısa kurulum. */
 class OnboardingActivity : Activity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(Themes.wrap(newBase))
+    }
+
     private class Step(
         val icon: String,
         val title: String,
@@ -140,9 +144,9 @@ class OnboardingActivity : Activity() {
 
         // Büyük simge
         root.addView(TextView(this).apply {
-            text = step.icon
-            textSize = 44f
+            textSize = 54f
             gravity = Gravity.CENTER
+            Icons.apply(this, step.icon, Ui.accentText(this@OnboardingActivity))
             background = Ui.rounded(Ui.accentSoft(), Ui.dp(this@OnboardingActivity, 56).toFloat())
         }, LinearLayout.LayoutParams(Ui.dp(this, 112), Ui.dp(this, 112)).apply {
             gravity = Gravity.CENTER_HORIZONTAL

@@ -54,7 +54,23 @@ class SpeedGauge(c: Context) : View(c) {
         }
     var caption = "İndirme"
 
+    /**
+     * Renkli mod: koyu zeminde yay hıza göre renk alır (yavaş mor-mavi, hızlı turkuaz, çok hızlı turuncu),
+     * yazılar [fg] renginde çizilir. Kapalıyken eski beyaz görünüm (renkli degrade kart üstünde).
+     */
+    var colorful = false
+        set(v) {
+            field = v
+            gradientFor = -1
+            invalidate()
+        }
+    var fg = Color.WHITE
+    var muted = 0xB3FFFFFF.toInt()
+    var track = 0x33FFFFFF
+
     private var speed = 0L
+    private var fromSpeed = 0L
+    private var shownSpeed = 0L
     private var shown = 0f
     private var animator: ValueAnimator? = null
 
@@ -83,14 +99,19 @@ class SpeedGauge(c: Context) : View(c) {
     }
 
     fun setSpeed(bps: Long) {
+        fromSpeed = shownSpeed
         speed = bps
         val target = fraction(bps)
+        val from = shown
         animator?.cancel()
-        animator = ValueAnimator.ofFloat(shown, target).apply {
-            duration = 450
-            interpolator = DecelerateInterpolator()
+        animator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 600
+            interpolator = DecelerateInterpolator(1.6f)
             addUpdateListener {
-                shown = it.animatedValue as Float
+                val t = it.animatedValue as Float
+                shown = from + (target - from) * t
+                // Rakam da ibreyle birlikte sayarak değişir
+                shownSpeed = (fromSpeed + (speed - fromSpeed) * t).toLong()
                 invalidate()
             }
             start()
@@ -115,31 +136,47 @@ class SpeedGauge(c: Context) : View(c) {
 
         arcPaint.strokeWidth = stroke
         arcPaint.shader = null
-        arcPaint.color = 0x33FFFFFF
+        arcPaint.color = track
         canvas.drawArc(rect, start, sweep, false, arcPaint)
 
-        // İlerleme yayı: beyazdan yarı saydama geçiş
+        // İlerleme yayı: renkli modda hız renkleri, değilse beyazdan yarı saydama
         if (gradientFor != width) {
             gradientFor = width
-            gradient = SweepGradient(cx, cy, intArrayOf(0x99FFFFFF.toInt(), Color.WHITE), floatArrayOf(0f, 0.75f)).also {
+            val cols = if (colorful) SPEED_COLORS else intArrayOf(0x99FFFFFF.toInt(), Color.WHITE)
+            val stops = if (colorful) floatArrayOf(0f, 0.32f, 0.52f, 0.75f) else floatArrayOf(0f, 0.75f)
+            gradient = SweepGradient(cx, cy, cols, stops).also {
                 val m = android.graphics.Matrix()
                 m.setRotate(start - 2, cx, cy)
                 it.setLocalMatrix(m)
             }
         }
-        arcPaint.shader = gradient
-        if (shown > 0.001f) canvas.drawArc(rect, start, sweep * shown, false, arcPaint)
+        if (shown > 0.001f) {
+            arcPaint.shader = gradient
+            if (colorful) {
+                // hafif parıltı: yayın altına geniş ve saydam bir kopya
+                arcPaint.strokeWidth = stroke * 2.1f
+                arcPaint.alpha = 0x30
+                canvas.drawArc(rect, start, sweep * shown, false, arcPaint)
+                arcPaint.alpha = 0xFF
+                arcPaint.strokeWidth = stroke
+            }
+            canvas.drawArc(rect, start, sweep * shown, false, arcPaint)
+        }
         arcPaint.shader = null
 
         // Uçtaki parlak nokta
         val ang = Math.toRadians((start + sweep * shown).toDouble())
         val px = cx + (size / 2) * cos(ang).toFloat()
         val py = cy + (size / 2) * sin(ang).toFloat()
-        dot.color = Color.WHITE
+        dot.color = if (colorful) speedColor(shown) else Color.WHITE
         canvas.drawCircle(px, py, stroke * 0.62f, dot)
+        if (colorful) {
+            dot.color = fg
+            canvas.drawCircle(px, py, stroke * 0.28f, dot)
+        }
 
         // Ölçek etiketleri
-        text.color = 0x99FFFFFF.toInt()
+        text.color = muted
         text.textSize = 10 * d
         text.typeface = Typeface.DEFAULT
         val labels = if (bits) listOf("1K", "10K", "100K", "1M", "10M", "100M", "1G") else listOf("1K", "10K", "100K", "1M", "10M", "100M")
@@ -152,19 +189,36 @@ class SpeedGauge(c: Context) : View(c) {
         }
 
         // Ortadaki değer
-        val (num, unit) = Fmt.speedParts(speed, bits)
-        text.color = Color.WHITE
+        val (num, unit) = Fmt.speedParts(shownSpeed, bits)
+        text.color = fg
         text.typeface = Typeface.DEFAULT_BOLD
         text.textSize = 46 * d
         canvas.drawText(num, cx, cy + 10 * d, text)
         text.typeface = Ui.MEDIUM
         text.textSize = 16 * d
-        text.color = 0xE6FFFFFF.toInt()
+        text.color = if (colorful) speedColor(shown) else 0xE6FFFFFF.toInt()
         canvas.drawText(unit, cx, cy + 34 * d, text)
         text.textSize = 12 * d
-        text.color = 0xB3FFFFFF.toInt()
+        text.color = muted
         canvas.drawText(caption, cx, cy + size / 2 - 2 * d, text)
     }
+}
+
+/** Hız renkleri: yavaş mor-mavi, orta mavi, hızlı turkuaz, çok hızlı turuncu. */
+private val SPEED_COLORS = intArrayOf(0xFF7B6CFF.toInt(), 0xFF3FA9FF.toInt(), 0xFF2EE6C5.toInt(), 0xFFFF9F43.toInt())
+private val SPEED_STOPS = floatArrayOf(0f, 0.42f, 0.69f, 1f)
+private val ARGB = android.animation.ArgbEvaluator()
+
+/** Yaydaki konuma (0..1) göre hız rengi. */
+fun speedColor(f: Float): Int {
+    val x = f.coerceIn(0f, 1f)
+    for (i in 1 until SPEED_STOPS.size) {
+        if (x <= SPEED_STOPS[i]) {
+            val t = (x - SPEED_STOPS[i - 1]) / (SPEED_STOPS[i] - SPEED_STOPS[i - 1])
+            return ARGB.evaluate(t, SPEED_COLORS[i - 1], SPEED_COLORS[i]) as Int
+        }
+    }
+    return SPEED_COLORS.last()
 }
 
 /** Yumuşak çizgili, altı dolgulu mini hız grafiği. */

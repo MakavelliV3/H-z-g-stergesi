@@ -16,6 +16,10 @@ import java.util.Locale
 /** Tek bir uygulamanın son 30 günü: grafik, mobil/Wi-Fi, ön/arka plan, indirme/yükleme. */
 class AppDetailActivity : Activity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(Themes.wrap(newBase))
+    }
+
     companion object {
         const val EXTRA_UID = "uid"
     }

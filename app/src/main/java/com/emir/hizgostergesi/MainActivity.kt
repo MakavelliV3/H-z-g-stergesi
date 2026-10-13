@@ -22,6 +22,10 @@ import android.widget.TextView
  */
 class MainActivity : Activity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(Themes.wrap(newBase))
+    }
+
     companion object {
         const val EXTRA_TAB = "sekme"
         const val TAB_HOME = 0
@@ -68,6 +72,7 @@ class MainActivity : Activity() {
             return
         }
         Ui.setupWindow(this)
+        themeStamp = themeKey()
 
         val root = FrameLayout(this).apply { setBackgroundColor(Ui.bg(this@MainActivity)) }
         content = FrameLayout(this)
@@ -102,9 +107,20 @@ class MainActivity : Activity() {
         if (intent.hasExtra(EXTRA_TAB)) select(intent.getIntExtra(EXTRA_TAB, TAB_HOME))
     }
 
+    /** Tema ayarları; Ayarlar'da değişirse geri dönünce pencere yeniden kurulur. */
+    private var themeStamp = ""
+    private fun themeKey(): String {
+        val p = Prefs.get(this)
+        return "${p.getInt(Prefs.THEME, 0)}|${p.getBoolean(Prefs.FORCE_DARK, true)}|${p.getBoolean(Prefs.DYNAMIC_COLOR, true)}"
+    }
+
     override fun onResume() {
         super.onResume()
         if (current < 0) return
+        if (themeStamp.isNotEmpty() && themeKey() != themeStamp) {
+            recreate()
+            return
+        }
         resumed = true
         screens[current]?.onShow()
         handler.removeCallbacks(ticker)
