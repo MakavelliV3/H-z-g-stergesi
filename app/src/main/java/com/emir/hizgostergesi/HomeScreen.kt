@@ -127,7 +127,13 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             colorful = themed
             this.fg = fg
             this.muted = muted
-            if (themed) track = Ui.outline(a)
+            if (themed) {
+                track = Ui.outline(a)
+                // Yavaşta temanın ikinci rengi, hızlandıkça ana vurgu rengi (AMOLED: mavi → turkuaz)
+                slowColor = Ui.ACCENT_2
+                midColor = Ui.ACCENT
+                accent = Ui.accentText(a)
+            }
         }
         addView(gauge, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             leftMargin = dp(24)

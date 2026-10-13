@@ -68,6 +68,29 @@ class SpeedGauge(c: Context) : View(c) {
     var muted = 0xB3FFFFFF.toInt()
     var track = 0x33FFFFFF
 
+    /** Renkli modda yavaş ve orta hız renkleri (temadan gelir); çok hızlı her zaman turuncu. */
+    var slowColor = 0xFF3FA9FF.toInt()
+        set(v) {
+            field = v
+            gradientFor = -1
+        }
+    var midColor = 0xFF2EE6C5.toInt()
+        set(v) {
+            field = v
+            gradientFor = -1
+        }
+    /** Birim yazısının rengi (renkli modda). */
+    var accent = 0xFF2EE6C5.toInt()
+
+    private val evaluator = android.animation.ArgbEvaluator()
+
+    /** Yaydaki konuma göre renk: yavaş → orta → çok hızlı (turuncu). */
+    private fun colorAt(f: Float): Int {
+        val x = f.coerceIn(0f, 1f)
+        return if (x <= 0.6f) evaluator.evaluate(x / 0.6f, slowColor, midColor) as Int
+        else evaluator.evaluate((x - 0.6f) / 0.4f, midColor, FAST_COLOR) as Int
+    }
+
     private var speed = 0L
     private var fromSpeed = 0L
     private var shownSpeed = 0L
@@ -142,11 +165,21 @@ class SpeedGauge(c: Context) : View(c) {
         // İlerleme yayı: renkli modda hız renkleri, değilse beyazdan yarı saydama
         if (gradientFor != width) {
             gradientFor = width
-            val cols = if (colorful) SPEED_COLORS else intArrayOf(0x99FFFFFF.toInt(), Color.WHITE)
-            val stops = if (colorful) floatArrayOf(0f, 0.32f, 0.52f, 0.75f) else floatArrayOf(0f, 0.75f)
+            // Yay 270° (turun 0.75'i). Uçtaki yuvarlak kapak başlangıcın biraz gerisine taştığı için
+            // degrade 10° önceden başlar ve turun sonu yine başlangıç rengine döner (yoksa kapakta son renk görünür).
+            val off = 10f / 360f
+            val cols: IntArray
+            val stops: FloatArray
+            if (colorful) {
+                cols = intArrayOf(slowColor, slowColor, midColor, FAST_COLOR, FAST_COLOR, slowColor)
+                stops = floatArrayOf(0f, off, off + 0.45f, off + 0.75f, off + 0.8f, 1f)
+            } else {
+                cols = intArrayOf(0x99FFFFFF.toInt(), 0x99FFFFFF.toInt(), Color.WHITE, Color.WHITE, 0x99FFFFFF.toInt())
+                stops = floatArrayOf(0f, off, off + 0.75f, off + 0.8f, 1f)
+            }
             gradient = SweepGradient(cx, cy, cols, stops).also {
                 val m = android.graphics.Matrix()
-                m.setRotate(start - 2, cx, cy)
+                m.setRotate(start - 10f, cx, cy)
                 it.setLocalMatrix(m)
             }
         }
@@ -168,7 +201,7 @@ class SpeedGauge(c: Context) : View(c) {
         val ang = Math.toRadians((start + sweep * shown).toDouble())
         val px = cx + (size / 2) * cos(ang).toFloat()
         val py = cy + (size / 2) * sin(ang).toFloat()
-        dot.color = if (colorful) speedColor(shown) else Color.WHITE
+        dot.color = if (colorful) colorAt(shown) else Color.WHITE
         canvas.drawCircle(px, py, stroke * 0.62f, dot)
         if (colorful) {
             dot.color = fg
@@ -196,7 +229,7 @@ class SpeedGauge(c: Context) : View(c) {
         canvas.drawText(num, cx, cy + 10 * d, text)
         text.typeface = Ui.MEDIUM
         text.textSize = 16 * d
-        text.color = if (colorful) speedColor(shown) else 0xE6FFFFFF.toInt()
+        text.color = if (colorful) accent else 0xE6FFFFFF.toInt()
         canvas.drawText(unit, cx, cy + 34 * d, text)
         text.textSize = 12 * d
         text.color = muted
@@ -204,22 +237,8 @@ class SpeedGauge(c: Context) : View(c) {
     }
 }
 
-/** Hız renkleri: yavaş mor-mavi, orta mavi, hızlı turkuaz, çok hızlı turuncu. */
-private val SPEED_COLORS = intArrayOf(0xFF7B6CFF.toInt(), 0xFF3FA9FF.toInt(), 0xFF2EE6C5.toInt(), 0xFFFF9F43.toInt())
-private val SPEED_STOPS = floatArrayOf(0f, 0.42f, 0.69f, 1f)
-private val ARGB = android.animation.ArgbEvaluator()
-
-/** Yaydaki konuma (0..1) göre hız rengi. */
-fun speedColor(f: Float): Int {
-    val x = f.coerceIn(0f, 1f)
-    for (i in 1 until SPEED_STOPS.size) {
-        if (x <= SPEED_STOPS[i]) {
-            val t = (x - SPEED_STOPS[i - 1]) / (SPEED_STOPS[i] - SPEED_STOPS[i - 1])
-            return ARGB.evaluate(t, SPEED_COLORS[i - 1], SPEED_COLORS[i]) as Int
-        }
-    }
-    return SPEED_COLORS.last()
-}
+/** Çok yüksek hız rengi (yayın sonu). */
+private const val FAST_COLOR = 0xFFFF9F43.toInt()
 
 /** Yumuşak çizgili, altı dolgulu mini hız grafiği. */
 class Sparkline(c: Context) : View(c) {
