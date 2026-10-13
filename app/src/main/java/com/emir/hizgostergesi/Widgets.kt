@@ -40,6 +40,13 @@ object Widgets {
         if (large.isNotEmpty()) mgr.updateAppWidget(large, largeViews(c))
     }
 
+    /** Kullanıcının seçtiği widget zemini: 0 koyu, 1 yarı saydam, 2 saydam. */
+    fun background(c: Context) = when (Prefs.get(c).getInt(Prefs.WIDGET_BG, 1)) {
+        0 -> R.drawable.widget_bg_solid
+        2 -> R.drawable.widget_bg_clear
+        else -> R.drawable.widget_bg
+    }
+
     private fun color(c: Context) = Prefs.onDark(Prefs.get(c).getInt(Prefs.COLOR, Prefs.DEFAULT_COLOR))
 
     fun smallViews(c: Context): RemoteViews {
@@ -55,6 +62,7 @@ object Widgets {
                 setTextColor(R.id.ws_unit, color)
                 setTextColor(R.id.ws_today, color)
                 setOnClickPendingIntent(R.id.ws_root, open(c))
+                setInt(R.id.ws_root, "setBackgroundResource", background(c))
             }
     }
 
@@ -85,7 +93,40 @@ object Widgets {
                 setTextColor(R.id.wl_extra, color)
                 setImageViewBitmap(R.id.wl_graph, graph(SpeedService.recent(), color))
                 setOnClickPendingIntent(R.id.wl_root, open(c))
+                setInt(R.id.wl_root, "setBackgroundResource", background(c))
             }
+    }
+
+    /**
+     * Bildirim için grafik: sadece saydamlık kanalı (ALPHA_8), rengi ImageView'da verilir.
+     * Her saniye sisteme gönderildiği için renkli bitmap'in dörtte biri boyutunda.
+     */
+    fun graphMask(samples: LongArray, w: Int, h: Int): Bitmap {
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ALPHA_8)
+        val n = samples.size
+        if (n < 2) return bmp
+        val cv = Canvas(bmp)
+        val max = maxOf(samples.maxOrNull() ?: 0L, 1024L).toFloat()
+        val pad = 3f
+        val line = Path()
+        for (i in 0 until n) {
+            val x = i * (w - 1f) / (n - 1)
+            val y = h - pad - samples[i] / max * (h - 2 * pad)
+            if (i == 0) line.moveTo(x, y) else line.lineTo(x, y)
+        }
+        val fill = Path(line).apply {
+            lineTo(w.toFloat(), h.toFloat())
+            lineTo(0f, h.toFloat())
+            close()
+        }
+        cv.drawPath(fill, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 0, 0, 0) })
+        cv.drawPath(line, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = maxOf(2f, h / 24f)
+            strokeJoin = Paint.Join.ROUND
+            color = Color.BLACK
+        })
+        return bmp
     }
 
     /** Son ölçümlerin dolgulu çizgi grafiği. */

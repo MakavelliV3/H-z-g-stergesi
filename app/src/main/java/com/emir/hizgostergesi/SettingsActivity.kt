@@ -160,8 +160,16 @@ class SettingsActivity : Activity() {
 
     private fun notification(root: LinearLayout) {
         val ctx = this
-        root.addView(Ui.card(ctx, "Satırlar", "📝").apply {
-            addView(Ui.hint(ctx, "Bildirim kapalıyken ilk iki satır, aşağı çekince seçtiğin tüm satırlar görünür. Değişiklikler bir saniye içinde uygulanır."))
+        root.addView(Ui.card(ctx, "Kapalı görünüm", "📶").apply {
+            addView(Ui.hint(ctx, "Bildirim küçükken (yukarı kaydırılmış hâli) hızın altında ne görünsün?"))
+            addView(Ui.choiceRow(ctx, listOf("Paketten kalan" to 0, "Bugünkü kullanım" to 1, "Son X saat" to 2, "Sadece hız" to 3),
+                prefs.getInt(Prefs.N_SMALL, 0)) { put(Prefs.N_SMALL, it) })
+            addView(Ui.switch(ctx, "Mini hız grafiği", prefs.getBoolean(Prefs.N_GRAPH, true)) { put(Prefs.N_GRAPH, it) })
+            addView(Ui.switch(ctx, "İnce paket çubuğu (paket takibi açıksa)", prefs.getBoolean(Prefs.N_BAR, true)) { put(Prefs.N_BAR, it) })
+            addView(Ui.hint(ctx, "\"Paketten kalan\" seçiliyken paket takibi kapalıysa bugünkü kullanım gösterilir."))
+        })
+        root.addView(Ui.card(ctx, "Açık görünüm satırları", "📝").apply {
+            addView(Ui.hint(ctx, "Bildirimi aşağı çekince görünen satırlar. Değişiklikler bir saniye içinde uygulanır."))
             listOf(
                 Triple("Anlık hız", Prefs.N_LINE_SPEED, true),
                 Triple("Paket durumu (paket takibi açıksa)", Prefs.N_LINE_PLAN, true),
@@ -543,6 +551,11 @@ class SettingsActivity : Activity() {
         root.addView(Ui.card(ctx, "Ana ekran widget'ı", "🧩").apply {
             addView(Ui.label(ctx, "Widget ne sıklıkla güncellensin?"))
             addView(Ui.choiceRow(ctx, listOf("5 sn" to 5, "15 sn" to 15, "30 sn" to 30, "1 dk" to 60), prefs.getInt(Prefs.WIDGET_SEC, 15)) { put(Prefs.WIDGET_SEC, it) })
+            addView(Ui.label(ctx, "Widget zemini"))
+            addView(Ui.choiceRow(ctx, listOf("Koyu" to 0, "Yarı saydam" to 1, "Saydam" to 2), prefs.getInt(Prefs.WIDGET_BG, 1)) {
+                put(Prefs.WIDGET_BG, it)
+                try { Widgets.updateAll(ctx) } catch (e: Exception) { }
+            })
             addView(Ui.hint(ctx, "Eklemek için: ana ekranda boş bir yere basılı tut → Widget'lar → Hız Göstergesi."))
         })
     }

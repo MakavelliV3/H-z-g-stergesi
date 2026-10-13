@@ -577,3 +577,62 @@ class HeatMap(c: Context) : View(c) {
         }
     }
 }
+
+/** Kalın halka: dolan kısım kullanılanı gösterir, ortada büyük değer ve alt yazı. Açılışta dolarak gelir. */
+class RingProgress(c: Context, private val fraction: Float, private val color: Int, private val value: String, private val sub: String) : View(c) {
+    private val rr = RectF()
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+    private val track = Ui.outline(c)
+    private val primary = Ui.primary(c)
+    private val secondary = Ui.secondary(c)
+    private var shown = 0f
+
+    init {
+        contentDescription = "$value $sub"
+        ValueAnimator.ofFloat(0f, fraction.coerceIn(0f, 1f)).apply {
+            duration = 900
+            startDelay = 150
+            interpolator = DecelerateInterpolator(1.8f)
+            addUpdateListener {
+                shown = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val d = resources.displayMetrics.density
+        val stroke = 12 * d
+        val size = minOf(width, height) - stroke
+        val cx = width / 2f
+        val cy = height / 2f
+        rr.set(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2)
+        paint.strokeWidth = stroke
+        paint.color = track
+        canvas.drawArc(rr, 0f, 360f, false, paint)
+        if (shown > 0.002f) {
+            paint.color = (color and 0x00FFFFFF) or 0x30000000
+            paint.strokeWidth = stroke * 1.9f
+            canvas.drawArc(rr, -90f, 360f * shown, false, paint)
+            paint.color = color
+            paint.strokeWidth = stroke
+            canvas.drawArc(rr, -90f, 360f * shown, false, paint)
+        }
+        textPaint.color = primary
+        textPaint.typeface = Typeface.DEFAULT_BOLD
+        textPaint.textSize = 21 * d
+        // Uzun değerler halkaya sığsın
+        while (textPaint.measureText(value) > size - stroke * 2.4f && textPaint.textSize > 11 * d) textPaint.textSize -= d
+        canvas.drawText(value, cx, cy + 4 * d, textPaint)
+        textPaint.typeface = Ui.MEDIUM
+        textPaint.textSize = 12 * d
+        textPaint.color = secondary
+        canvas.drawText(sub, cx, cy + 22 * d, textPaint)
+    }
+}

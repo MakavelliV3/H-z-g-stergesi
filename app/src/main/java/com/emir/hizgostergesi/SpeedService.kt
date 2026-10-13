@@ -308,13 +308,25 @@ class SpeedService : Service() {
             }
             if (lines.isEmpty()) lines += speedText
 
+            // Bildirimin kapalı (küçük) hâli: hız + seçilen ikinci satır
+            val plan = PlanState.last
+            val smallSecond: String? = when (prefs.getInt(Prefs.N_SMALL, 0)) {
+                0 -> plan?.let { "Paket: ${Fmt.bytes(it.remaining)} kaldı · ${PlanMath.daysLeft(now, it.end)} gün" }
+                    ?: "Bugün ${Fmt.bytes(today.mobile + today.wifi)} (mobil ${Fmt.bytes(today.mobile)})"
+                1 -> "Bugün ${Fmt.bytes(today.mobile + today.wifi)} (mobil ${Fmt.bytes(today.mobile)})"
+                2 -> roll.first
+                else -> null
+            }
+            val smallLines = listOfNotNull(speedText, smallSecond)
+
             // Bildirimi sadece içerik değiştiyse (ya da 30 sn'de bir) yeniden çiz: pil ve işlemci tasarrufu
             val key = lines.joinToString("|") + "|" + Fmt.compact(down, bits) + Fmt.compact(up, bits) + "|" +
                 listOf(Prefs.SB_MODE, Prefs.SB_SIZE, Prefs.SB_UNIT, Prefs.N_SIZE, Prefs.N_ARROWS, Prefs.N_BG).joinToString(",") { prefs.getInt(it, -1).toString() } +
                 listOf(Prefs.SB_BOLD, Prefs.SB_HIDE_IDLE, Prefs.N_MONO, Prefs.N_BTN_OVERLAY, Prefs.N_BTN_RESET, Prefs.N_BTN_ROLL_RESET, Prefs.N_LOCKSCREEN, Prefs.OVERLAY)
-                    .joinToString("") { if (prefs.getBoolean(it, false)) "1" else "0" } + color
+                    .joinToString("") { if (prefs.getBoolean(it, false)) "1" else "0" } + color + "|" + smallLines.joinToString("|") +
+                prefs.getBoolean(Prefs.N_GRAPH, true) + prefs.getBoolean(Prefs.N_BAR, true)
             if (key != lastNotifKey || nowEl - lastNotifAt > 30_000L) {
-                val n = build(down, up, bits, lines, color)
+                val n = build(down, up, bits, lines, color, smallLines, plan)
                 lastNotification = n
                 lastNotifKey = key
                 lastNotifAt = nowEl
@@ -403,7 +415,10 @@ class SpeedService : Service() {
         else -> "↓" to "↑"
     }
 
-    private fun build(down: Long, up: Long, bits: Boolean, lines: List<String>, color: Int): Notification {
+    private fun build(
+        down: Long, up: Long, bits: Boolean, lines: List<String>, color: Int,
+        smallLines: List<String> = lines.take(2), plan: PlanState.Snapshot? = PlanState.last
+    ): Notification {
         val size = prefs.getInt(Prefs.N_SIZE, 1).coerceIn(0, 2)
         val firstSp = floatArrayOf(13f, 15f, 18f)[size]
         val otherSp = floatArrayOf(11f, 12.5f, 14.5f)[size]
@@ -420,7 +435,7 @@ class SpeedService : Service() {
             else -> null
         }
 
-        fun fill(v: RemoteViews, ids: IntArray) {
+        fun fill(v: RemoteViews, ids: IntArray, lines: List<String>) {
             ids.forEachIndexed { i, id ->
                 if (i < lines.size) {
                     v.setViewVisibility(id, View.VISIBLE)
@@ -433,10 +448,37 @@ class SpeedService : Service() {
             }
         }
 
-        // Kapalıyken ilk iki satır, aşağı çekince hepsi
-        val small = RemoteViews(packageName, R.layout.notif).also { fill(it, intArrayOf(R.id.l1, R.id.l2)) }
+        // Kapalıyken hız + seçilen satır, aşağı çekince seçilen tüm satırlar
+        val small = RemoteViews(packageName, R.layout.notif).also { fill(it, intArrayOf(R.id.l1, R.id.l2), smallLines) }
         val big = RemoteViews(packageName, R.layout.notif_big).also {
-            fill(it, intArrayOf(R.id.l1, R.id.l2, R.id.l3, R.id.l4, R.id.l5))
+            fill(it, intArrayOf(R.id.l1, R.id.l2, R.id.l3, R.id.l4, R.id.l5), lines)
+        }
+        // Mini hız grafiği (saydamlık maskesi: az bellek, rengi sonradan verilir)
+        val graphColor = textColor ?: Ui.ACCENT
+        if (prefs.getBoolean(Prefs.N_GRAPH, true)) {
+            val samples = recent()
+            small.setViewVisibility(R.id.n_graph, View.VISIBLE)
+            small.setImageViewBitmap(R.id.n_graph, Widgets.graphMask(samples.copyOfRange(maxOf(0, samples.size - 30), samples.size), 144, 56))
+            small.setInt(R.id.n_graph, "setColorFilter", graphColor)
+            big.setViewVisibility(R.id.n_graph, View.VISIBLE)
+            big.setImageViewBitmap(R.id.n_graph, Widgets.graphMask(samples, 480, 72))
+            big.setInt(R.id.n_graph, "setColorFilter", graphColor)
+        }
+        // İnce paket çubuğu
+        if (plan != null && prefs.getBoolean(Prefs.N_BAR, true)) {
+            val progress = (plan.ratio * 1000).toInt().coerceIn(0, 1000)
+            val barColor = when {
+                plan.ratio >= 1.0 -> 0xFFE5484D.toInt()
+                plan.ratio >= 0.8 -> 0xFFF5A524.toInt()
+                else -> graphColor
+            }
+            for (v in listOf(small, big)) {
+                v.setViewVisibility(R.id.n_bar, View.VISIBLE)
+                v.setProgressBar(R.id.n_bar, 1000, progress, false)
+                if (Build.VERSION.SDK_INT >= 31) {
+                    v.setColorStateList(R.id.n_bar, "setProgressTintList", android.content.res.ColorStateList.valueOf(barColor))
+                }
+            }
         }
 
         val builder = Notification.Builder(this, CHANNEL_ID)

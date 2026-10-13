@@ -242,36 +242,30 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val over = s.used >= s.limit
         val card = Ui.card(a, "Paketim", "📦").apply {
             isClickable = true
+            Ui.pressable(this, 0.98f)
             setOnClickListener { open() }
         }
-        val head = LinearLayout(a).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.BOTTOM
-        }
-        head.addView(Ui.text(a, Fmt.bytes(s.used), 26f, bold = true, color = if (over) 0xFFE53935.toInt() else Ui.primary(a)).apply {
-            setPadding(0, 0, dp(6), 0)
-        })
-        head.addView(Ui.hint(a, "/ ${Fmt.bytes(s.limit)}").apply { setPadding(0, 0, 0, dp(6)) })
-        head.addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
-        head.addView(Ui.text(a, "$days gün", 15f, color = Ui.accentText(a)).apply {
-            typeface = Ui.MEDIUM
-            setPadding(0, 0, 0, dp(6))
-        })
-        card.addView(head)
-        val barColor = when {
-            s.ratio >= 1 -> 0xFFE53935.toInt()
-            s.ratio >= 0.8 -> 0xFFFF9800.toInt()
+        val ringColor = when {
+            s.ratio >= 1 -> 0xFFE5484D.toInt()
+            s.ratio >= 0.8 -> 0xFFF5A524.toInt()
             else -> Ui.ACCENT
         }
-        card.addView(PercentBar(a, s.ratio.toFloat(), barColor), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(10)).apply {
-            topMargin = dp(4)
-            bottomMargin = dp(10)
-        })
-        if (over) {
-            card.addView(Ui.text(a, "Paket bitti: ${Fmt.bytes(s.used - s.limit)} fazla kullanıldı.", 14f, color = 0xFFE53935.toInt()))
-        } else {
-            card.addView(Ui.text(a, "Kalan ${Fmt.bytes(s.remaining)} · bugün en fazla ~${Fmt.bytes(PlanMath.dailyAllowance(s.remaining, now, s.end))}", 14f))
+        val row = LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
+        row.addView(RingProgress(a, s.ratio.toFloat(), ringColor,
+            if (over) "+" + Fmt.bytes(s.used - s.limit) else Fmt.bytes(s.remaining),
+            if (over) "aşıldı" else "kaldı"), LinearLayout.LayoutParams(dp(124), dp(124)).apply { rightMargin = dp(16) })
+        val facts = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+        facts.addView(Ui.text(a, "%${(s.ratio * 100).toInt().coerceAtMost(999)} kullanıldı", 17f).apply { typeface = Ui.MEDIUM })
+        facts.addView(Ui.hint(a, "${Fmt.bytes(s.used)} / ${Fmt.bytes(s.limit)}"))
+        facts.addView(Ui.text(a, "$days gün kaldı", 15f, topDp = 6, color = Ui.accentText(a)).apply { typeface = Ui.MEDIUM })
+        if (!over) facts.addView(Ui.hint(a, "Günde ~${Fmt.bytes(PlanMath.dailyAllowance(s.remaining, now, s.end))} kullanabilirsin"))
+        row.addView(facts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        card.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = dp(8)
+        })
         val forecast = PlanMath.forecast(s.used, s.start, now, s.end)
         val early = PlanMath.daysEarly(s.used, s.limit, s.start, now, s.end)
         card.addView(Ui.hint(a, when {
@@ -298,13 +292,13 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             })
         }
         if (prefs.getBoolean(Prefs.OVERLAY, false) && !Settings.canDrawOverlays(a)) {
-            health.addView(banner("🪟", "Yüzen pencere izni yok", "Pencere açık ama gösterme izni verilmemiş.", "İzin ver") {
+            health.addView(banner("🪟", "Yüzen pencere izni yok", "", "İzin ver", compact = true) {
                 a.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${a.packageName}")))
             })
         }
         val pm = a.getSystemService(PowerManager::class.java)
         if (!pm.isIgnoringBatteryOptimizations(a.packageName) && !prefs.getBoolean(Prefs.HEALTH_BATTERY_HIDDEN, false)) {
-            health.addView(banner("🔋", "Arka planda kapanabilir", "Samsung pil tasarrufu göstergeyi durdurabilir.", "Muaf tut", dismiss = {
+            health.addView(banner("🔋", "Pil tasarrufu göstergeyi durdurabilir", "", "Muaf tut", compact = true, dismiss = {
                 prefs.edit().putBoolean(Prefs.HEALTH_BATTERY_HIDDEN, true).apply()
                 refreshHealth()
             }) {
@@ -317,30 +311,34 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    private fun banner(icon: String, title: String, text: String, action: String?, dismiss: (() -> Unit)? = null, onAction: () -> Unit): View =
+    /** Uyarı/öneri şeridi. compact: tek satırlık küçük rozet (sağlık uyarıları için). */
+    private fun banner(icon: String, title: String, text: String, action: String?, dismiss: (() -> Unit)? = null,
+                       compact: Boolean = false, onAction: () -> Unit): View =
         LinearLayout(a).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(12), dp(10), dp(12))
+            if (compact) setPadding(dp(12), dp(4), dp(4), dp(4)) else setPadding(dp(14), dp(12), dp(10), dp(12))
             background = Ui.rounded(Ui.accentSoft(0x1F), dp(20).toFloat())
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 bottomMargin = dp(10)
             }
             addView(TextView(a).apply {
-                textSize = 22f
+                textSize = if (compact) 18f else 22f
                 Icons.apply(this, icon, Ui.accentText(a))
-                setPadding(0, 0, dp(12), 0)
+                setPadding(0, 0, dp(if (compact) 10 else 12), 0)
             })
             val texts = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-            texts.addView(Ui.text(a, title, 14f).apply {
+            texts.addView(Ui.text(a, title, if (compact) 13f else 14f).apply {
                 typeface = Ui.MEDIUM
                 setPadding(0, 0, 0, 0)
+                if (compact) maxLines = 2
             })
-            texts.addView(Ui.hint(a, text))
+            if (text.isNotEmpty()) texts.addView(Ui.hint(a, text))
             addView(texts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             if (dismiss != null) {
                 addView(TextView(a).apply {
-                    this.text = "Gizle"
+                    this.text = if (compact) "✕" else "Gizle"
+                    contentDescription = "Gizle"
                     textSize = 13f
                     setTextColor(Ui.secondary(a))
                     setPadding(dp(8), dp(8), dp(8), dp(8))

@@ -20,6 +20,8 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         "Kalın yazı" to SettingsActivity.CAT_STATUS,
         "Boştayken gizle" to SettingsActivity.CAT_STATUS,
         "Bildirim satırları" to SettingsActivity.CAT_NOTIF,
+        "Bildirim kapalı görünüm" to SettingsActivity.CAT_NOTIF,
+        "Bildirimde hız grafiği" to SettingsActivity.CAT_NOTIF,
         "Bağlantı türünü göster (5G, Wi-Fi)" to SettingsActivity.CAT_NOTIF,
         "Bildirim yazı boyutu" to SettingsActivity.CAT_NOTIF,
         "Ok stili" to SettingsActivity.CAT_NOTIF,
@@ -51,6 +53,9 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
         "Güncelleme aralığı" to SettingsActivity.CAT_BATTERY,
         "Ekran kapalıyken yavaşlat" to SettingsActivity.CAT_BATTERY,
         "Widget güncelleme sıklığı" to SettingsActivity.CAT_BATTERY,
+        "Widget zemini (saydam)" to SettingsActivity.CAT_BATTERY,
+        "Tema (AMOLED, gece mavisi, grafit)" to SettingsActivity.CAT_LOOK,
+        "Hep karanlık" to SettingsActivity.CAT_LOOK,
         "Kurulum sihirbazı ve izinler" to SettingsActivity.CAT_ABOUT,
         "Yedek al / geri yükle" to SettingsActivity.CAT_ABOUT,
         "CSV olarak dışa aktar (Excel)" to SettingsActivity.CAT_ABOUT,
@@ -108,7 +113,7 @@ class SettingsScreen(a: MainActivity) : Screen(a) {
                     (if (prefs.getBoolean(Prefs.ANOMALY_ON, true)) " · olağandışı uyarı" else "")
             }
             SettingsActivity.CAT_OVERLAY -> if (prefs.getBoolean(Prefs.OVERLAY, false)) "Açık · yazı ${prefs.getInt(Prefs.OVERLAY_SIZE, 12)}" else "Kapalı"
-            SettingsActivity.CAT_LOOK -> "${if (prefs.getBoolean(Prefs.DYNAMIC_COLOR, true)) "Material You" else "Klasik mavi"} · ${if (bits) "Mbps" else "MB/s"} · ${prefs.getInt(Prefs.UNIT_BASE, 1000)} tabanı"
+            SettingsActivity.CAT_LOOK -> "${Themes.current(a).let { t -> if (t != Themes.SYSTEM) Themes.NAMES[t] else if (prefs.getBoolean(Prefs.DYNAMIC_COLOR, true)) "Material You" else "Klasik mavi" }} · ${if (bits) "Mbps" else "MB/s"} · ${prefs.getInt(Prefs.UNIT_BASE, 1000)} tabanı"
             SettingsActivity.CAT_BATTERY -> "${prefs.getInt(Prefs.INTERVAL_SEC, 1)} sn aralık · widget ${prefs.getInt(Prefs.WIDGET_SEC, 15)} sn"
             else -> "İzinler, yedek, CSV, sürüm"
         }

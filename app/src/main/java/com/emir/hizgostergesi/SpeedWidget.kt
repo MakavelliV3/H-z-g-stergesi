@@ -33,6 +33,7 @@ class SpeedWidget : AppWidgetProvider() {
                 setTextColor(R.id.w_speed, color)
                 setTextColor(R.id.w_today, color)
                 setTextColor(R.id.w_period, color)
+                setInt(R.id.w_root, "setBackgroundResource", Widgets.background(c))
                 setOnClickPendingIntent(
                     R.id.w_root,
                     PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)

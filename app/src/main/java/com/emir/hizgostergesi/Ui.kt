@@ -116,6 +116,21 @@ object Ui {
         if (strokePx > 0) setStroke(strokePx, strokeColor)
     }
 
+    /** Basılınca hafifçe içe gömülen (küçülen) görünüm; tıklama olaylarına dokunmaz. */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    fun pressable(v: View, scale: Float = 0.97f): View {
+        v.setOnTouchListener { view, e ->
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN ->
+                    view.animate().scaleX(scale).scaleY(scale).setDuration(90).start()
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                    view.animate().scaleX(1f).scaleY(1f).setDuration(160).start()
+            }
+            false
+        }
+        return v
+    }
+
     /** Dokununca dalga efekti veren arka plan. */
     fun ripple(content: GradientDrawable, rippleColor: Int = 0x33808080) =
         RippleDrawable(ColorStateList.valueOf(rippleColor), content, null)
@@ -312,7 +327,11 @@ object Ui {
         setPadding(v, v, v, v)
         background = ripple(rounded(if (filled) ACCENT else accentSoft(), dp(c, 50).toFloat()))
         isClickable = true
-        setOnClickListener { onClick() }
+        pressable(this, 0.96f)
+        setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+            onClick()
+        }
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(c, 10) }
@@ -489,7 +508,11 @@ object Ui {
             minimumHeight = dp(c, 64)
             background = ripple(rounded(0, dp(c, 18).toFloat()))
             isClickable = true
-            setOnClickListener { onClick() }
+            pressable(this, 0.98f)
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                onClick()
+            }
             addView(TextView(c).apply {
                 textSize = 22f
                 gravity = Gravity.CENTER
