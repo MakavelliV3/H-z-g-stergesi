@@ -175,6 +175,19 @@ class SettingsActivity : Activity() {
                     "Android'in standart tasarımı kullanıldığı için mini grafik ve renkli arka plan bu modda yoktur."
                 else -> "Klasik: kendi tasarımımız (mini grafik, satır seçimi). Canlı: kronometre gibi durum çubuğunun solunda hap ve Now Bar."
             }))
+            if (prefs.getBoolean(Prefs.N_LIVE, false)) {
+                val status = Ui.text(ctx, LiveUpdate.statusText(ctx), 14f, topDp = 6, color = Ui.accentText(ctx))
+                addView(status)
+                // Bildirim bir iki saniye içinde yeniden kurulur; durumu sonra tekrar oku
+                status.postDelayed({ status.text = LiveUpdate.statusText(ctx) }, 2500)
+                addView(Ui.button(ctx, "Geliştirici seçeneklerini aç") {
+                    try {
+                        startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                    } catch (e: Exception) {
+                        toast("Önce Ayarlar → Telefon hakkında → Yazılım bilgileri → Yapım numarasına 7 kez dokun")
+                    }
+                })
+            }
             if (prefs.getBoolean(Prefs.N_LIVE, false) && LiveUpdate.supported && !LiveUpdate.allowed(ctx)) {
                 addView(Ui.button(ctx, "Canlı bildirim iznini aç", filled = true) {
                     try { startActivity(LiveUpdate.settingsIntent(ctx)) } catch (e: Exception) {

@@ -183,9 +183,9 @@ class SpeedGauge(c: Context) : View(c) {
                 it.setLocalMatrix(m)
             }
         }
-        if (shown > 0.001f) {
+        if (shown > 0.015f) {
             arcPaint.shader = gradient
-            if (colorful) {
+            if (colorful && shown > 0.04f) {
                 // hafif parıltı: yayın altına geniş ve saydam bir kopya
                 arcPaint.strokeWidth = stroke * 2.1f
                 arcPaint.alpha = 0x30

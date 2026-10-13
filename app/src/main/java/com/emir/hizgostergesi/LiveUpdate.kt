@@ -42,6 +42,27 @@ object LiveUpdate {
         }
     }
 
+    /** Android'in "öne çıkarıldı" bayrağı (Notification.FLAG_PROMOTED_ONGOING). */
+    private const val FLAG_PROMOTED = 0x00040000
+
+    /** Hız bildirimi şu an gerçekten hap olarak öne çıkarılmış mı. */
+    fun isPromoted(c: Context): Boolean = try {
+        val n = c.getSystemService(NotificationManager::class.java).activeNotifications
+            .firstOrNull { it.id == SpeedService.NOTIF_ID }?.notification
+        n != null && (n.flags and FLAG_PROMOTED) != 0
+    } catch (e: Exception) {
+        false
+    }
+
+    /** Ayarlarda gösterilecek durum ve (varsa) ne yapılması gerektiği. */
+    fun statusText(c: Context): String = when {
+        !supported -> "Bu telefonda Android ${Build.VERSION.RELEASE} var; canlı bildirim Android 16 (One UI 8) ister."
+        !allowed(c) -> "Android bu uygulamanın canlı bildirimlerine izin vermiyor. Aşağıdaki düğmeyle aç."
+        isPromoted(c) -> "✓ Çalışıyor: hız durum çubuğunun solunda hap olarak görünmeli."
+        else -> "Android bildirimi henüz hap yapmadı. Samsung'da: Ayarlar → Geliştirici seçenekleri → " +
+            "\"Tüm uygulamalar için canlı bildirimler\" (Live notifications for all apps) seçeneğini açıp telefonu yeniden başlat."
+    }
+
     fun settingsIntent(c: Context): Intent =
         Intent("android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS")
             .putExtra("android.provider.extra.APP_PACKAGE", c.packageName)
