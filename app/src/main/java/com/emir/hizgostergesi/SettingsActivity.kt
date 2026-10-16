@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Switch
@@ -553,36 +554,26 @@ class SettingsActivity : Activity() {
 
     private fun look(root: LinearLayout) {
         val ctx = this
-        root.addView(Ui.card(ctx, "Tema", "🌗").apply {
+        root.addView(Ui.card(ctx, "Vurgu rengi", "🌗").apply {
             val current = Themes.current(ctx)
-            val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-            (0 until 4).chunked(2).forEach { pair ->
-                val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-                pair.forEach { t ->
-                    row.addView(themeTile(t, t == current), LinearLayout.LayoutParams(0, dp(112), 1f).apply {
-                        setMargins(dp(4), dp(4), dp(4), dp(4))
-                    })
+            val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+            Themes.NAMES.indices.forEach { t ->
+                row.addView(themeTile(t, t == current), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            }
+            addView(row)
+            // Seçili rengin önizlemesi: kokpit segment çubuğu
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, dp(14), 0, dp(4))
+                repeat(10) { i ->
+                    addView(View(ctx).apply {
+                        setBackgroundColor(if (i < 6) Ui.ACCENT else Ui.outline(ctx))
+                    }, LinearLayout.LayoutParams(0, dp(6), 1f).apply { if (i < 9) rightMargin = dp(3) })
                 }
-                grid.addView(row)
-            }
-            addView(grid)
-            if (current != Themes.SYSTEM) {
-                addView(Ui.switch(ctx, "Telefon açık temadayken de karanlık kalsın", prefs.getBoolean(Prefs.FORCE_DARK, true)) {
-                    put(Prefs.FORCE_DARK, it)
-                    applyTheme()
-                })
-                addView(Ui.hint(ctx, "Kapalıysa telefonun açık temasında bu temanın açık hâli kullanılır."))
-            }
+            })
+            addView(Ui.hint(ctx, "Gösterge, grafikler, düğmeler ve seçili sekme bu renkte olur. Zemin her zaman saf siyahtır (AMOLED ekranda en az pil)."))
         })
-        root.addView(Ui.card(ctx, "Renkler ve birimler", "🎨").apply {
-            if (Build.VERSION.SDK_INT >= 31 && Themes.current(ctx) == Themes.SYSTEM) {
-                addView(Ui.switch(ctx, "Material You (duvar kâğıdı renkleri)", prefs.getBoolean(Prefs.DYNAMIC_COLOR, true)) {
-                    put(Prefs.DYNAMIC_COLOR, it)
-                    Ui.init(ctx)
-                    toast("Renkler güncellendi; uygulamayı yeniden açınca her yerde geçerli olur")
-                    recreate()
-                })
-            }
+        root.addView(Ui.card(ctx, "Birimler", "🎨").apply {
             addView(Ui.label(ctx, "Hız birimi"))
             addView(Ui.choiceRow(ctx, listOf("MB/s" to false, "Mbps" to true), prefs.getBoolean(Prefs.UNIT_BITS, false)) {
                 put(Prefs.UNIT_BITS, it)
@@ -770,43 +761,33 @@ class SettingsActivity : Activity() {
         recreate()
     }
 
-    /** Temanın küçük önizlemesi: zemin, kart, vurgu çizgisi ve adı. */
+    /** Vurgu rengi seçici: yuvarlak renk örneği ve adı. */
     private fun themeTile(t: Int, selected: Boolean): View {
-        val p = Themes.preview(t) ?: Palette(
-            0xFF0E1014.toInt(), 0xFF1A1D24.toInt(), 0xFFF1F3F7.toInt(), 0xFF9AA1AD.toInt(), 0xFF2C313B.toInt(),
-            Ui.ACCENT, Ui.ACCENT_2, 0xFF9DBBFF.toInt(), Color.WHITE
-        )
-        val r = dp(18).toFloat()
+        val p = Themes.preview(t)
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp(10))
-            background = Ui.ripple(Ui.rounded(p.bg, r, if (selected) dp(2) else dp(1), if (selected) Ui.ACCENT else Ui.outline(this@SettingsActivity)))
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(4), 0, dp(4))
             isClickable = true
             contentDescription = Themes.NAMES[t]
             setOnClickListener {
                 if (selected) return@setOnClickListener
                 it.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
-                put(Prefs.THEME, t)
+                put(Prefs.ACCENT_CHOICE, t)
                 applyTheme()
             }
-            // mini kart: gösterge yayı ve iki satır
-            addView(LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(10), dp(8), dp(10), dp(8))
-                background = Ui.rounded(p.surface, dp(10).toFloat())
-                addView(View(context).apply { background = Ui.rounded(p.accent, dp(3).toFloat()) },
-                    LinearLayout.LayoutParams(dp(46), dp(6)))
-                addView(View(context).apply { background = Ui.rounded(p.secondary and 0x66FFFFFF, dp(3).toFloat()) },
-                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(5)).apply { topMargin = dp(7) })
-                addView(View(context).apply { background = Ui.rounded(p.secondary and 0x66FFFFFF, dp(3).toFloat()) },
-                    LinearLayout.LayoutParams(dp(60), dp(5)).apply { topMargin = dp(5) })
-            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(FrameLayout(context).apply {
+                background = if (selected) Ui.rounded(0, dp(26).toFloat(), dp(2), p.accent) else null
+                setPadding(dp(4), dp(4), dp(4), dp(4))
+                addView(View(context).apply { background = Ui.rounded(p.accent, dp(20).toFloat()) },
+                    FrameLayout.LayoutParams(dp(40), dp(40)))
+            }, LinearLayout.LayoutParams(dp(48), dp(48)))
             addView(TextView(context).apply {
-                text = (if (selected) "✓ " else "") + Themes.NAMES[t]
-                textSize = 13f
-                typeface = Ui.MEDIUM
-                setTextColor(p.primary)
-                setPadding(dp(2), dp(8), 0, 0)
+                text = Themes.NAMES[t]
+                textSize = 12f
+                typeface = if (selected) Ui.MEDIUM else Typeface.DEFAULT
+                setTextColor(if (selected) p.accent else Ui.secondary(context))
+                setPadding(0, dp(6), 0, 0)
             })
         }
     }

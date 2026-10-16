@@ -6,11 +6,12 @@
 
     <TextView
         android:id="@+id/l1"
+        android:fontFamily="@font/mono_medium"
         android:textAppearance="@android:style/TextAppearance.Material.Notification.Title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textSize="16sp"
-        android:textStyle="bold" />
+        />
 
     <TextView
         android:id="@+id/l2"

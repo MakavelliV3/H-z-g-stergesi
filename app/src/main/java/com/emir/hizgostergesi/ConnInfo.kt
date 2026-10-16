@@ -34,6 +34,22 @@ object ConnInfo {
     @Volatile
     var cellular = false
 
+    /** Sinyal gücü (dBm) ve 0..4 seviye; bilinmiyorsa null / -1. Mobilde hücre, Wi-Fi'de RSSI. */
+    @Volatile
+    var cellDbm: Int? = null
+
+    @Volatile
+    var cellLevel = -1
+
+    @Volatile
+    var wifiDbm: Int? = null
+
+    @Volatile
+    var wifiLevel = -1
+
+    /** Şu anki bağlantının sinyali (dBm, seviye). */
+    fun signal(): Pair<Int?, Int> = if (kind == "Wi-Fi") wifiDbm to wifiLevel else if (kind in CELL_KINDS) cellDbm to cellLevel else null to -1
+
     /** Mobil hat yurt dışında/başka operatörde dolaşımda mı. */
     @Volatile
     var roaming = false
@@ -87,11 +103,17 @@ object ConnInfo {
         if (telCallback != null || Build.VERSION.SDK_INT < 31) return
         try {
             val tm = app.getSystemService(TelephonyManager::class.java)
-            val cb = object : TelephonyCallback(), TelephonyCallback.DisplayInfoListener {
+            val cb = object : TelephonyCallback(), TelephonyCallback.DisplayInfoListener, TelephonyCallback.SignalStrengthsListener {
                 override fun onDisplayInfoChanged(info: TelephonyDisplayInfo) {
                     cellType = info.networkType
                     cellOverride = info.overrideNetworkType
                     refresh(app)
+                }
+
+                override fun onSignalStrengthsChanged(s: android.telephony.SignalStrength) {
+                    val cell = s.cellSignalStrengths.firstOrNull { it.dbm != Int.MAX_VALUE && it.dbm < 0 }
+                    cellDbm = cell?.dbm
+                    cellLevel = if (cell != null) cell.level else -1
                 }
             }
             tm.registerTelephonyCallback(app.mainExecutor, cb)
@@ -133,6 +155,18 @@ object ConnInfo {
             caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
                 k = "Wi-Fi"
                 l = "Wi-Fi" + wifiBand(caps)
+                (caps.transportInfo as? WifiInfo)?.rssi?.let { r ->
+                    if (r in -127..-1) {
+                        wifiDbm = r
+                        wifiLevel = when {
+                            r >= -55 -> 4
+                            r >= -66 -> 3
+                            r >= -77 -> 2
+                            r >= -88 -> 1
+                            else -> 0
+                        }
+                    }
+                }
             }
             caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
                 k = cellGeneration(c)

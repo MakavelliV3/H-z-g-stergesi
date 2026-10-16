@@ -353,8 +353,8 @@ class BarChart(c: Context) : View(c) {
             selected = -1
             invalidate()
         }
-    var mobileColor = 0xFFFF9800.toInt()
-    var wifiColor = 0xFF2196F3.toInt()
+    var mobileColor = Ui.MOBILE
+    var wifiColor = Ui.WIFI
     var textColor = 0xFF888888.toInt()
 
     /** Üstteki "en yüksek" yazısı. */
@@ -472,8 +472,8 @@ class SplitBar(c: Context) : View(c) {
     private val rr = RectF()
     private var a = 0L
     private var b = 0L
-    var colorA = 0xFFFF9800.toInt()
-    var colorB = 0xFF2196F3.toInt()
+    var colorA = Ui.MOBILE
+    var colorB = Ui.WIFI
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val track = Ui.outline(c)
 
@@ -653,5 +653,123 @@ class RingProgress(c: Context, private val fraction: Float, private val color: I
         textPaint.textSize = 12 * d
         textPaint.color = secondary
         canvas.drawText(sub, cx, cy + 22 * d, textPaint)
+    }
+}
+
+/**
+ * Kokpit göstergesi: yan yana segmentler, logaritmik ölçek (1K..1G), değer değişince yumuşakça dolar.
+ * Altında ölçek etiketleri.
+ */
+class SegmentGauge(c: Context, private val segments: Int = 12) : View(c) {
+    var bits = false
+    var accent = Ui.ACCENT
+    var track = Ui.outline(c)
+    var labelColor = Themes.LABEL
+    private var shown = 0f
+    private var animator: ValueAnimator? = null
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Mono.regular(c)
+        textSize = 10 * resources.displayMetrics.density
+    }
+    private val rr = RectF()
+
+    /** 0..1 arası konum: 1 KB/s (1 Kbit/s) ile 1 GB/s (1 Gbit/s) arası logaritmik. */
+    fun fraction(bps: Long): Float {
+        val v = if (bits) bps * 8.0 else bps.toDouble()
+        val lo = 1_000.0
+        val hi = 1e9
+        if (v <= lo) return (v / lo * 0.02).toFloat().coerceIn(0f, 0.02f)
+        return ((log10(v) - log10(lo)) / (log10(hi) - log10(lo))).toFloat().coerceIn(0f, 1f)
+    }
+
+    fun setSpeed(bps: Long) {
+        val target = fraction(bps)
+        animator?.cancel()
+        animator = ValueAnimator.ofFloat(shown, target).apply {
+            duration = 500
+            interpolator = DecelerateInterpolator(1.6f)
+            addUpdateListener {
+                shown = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val d = resources.displayMetrics.density
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), (26 * d).toInt())
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val d = resources.displayMetrics.density
+        val gap = 3 * d
+        val h = 8 * d
+        val w = (width - gap * (segments - 1)) / segments
+        // Kısmen dolu segment de gösterilir: tam dolanlar vurgu, sıradaki kısmi
+        val filled = shown * segments
+        for (i in 0 until segments) {
+            val x = i * (w + gap)
+            rr.set(x, 0f, x + w, h)
+            paint.color = track
+            canvas.drawRoundRect(rr, 1.5f * d, 1.5f * d, paint)
+            val part = (filled - i).coerceIn(0f, 1f)
+            if (part > 0f) {
+                // Son segmentler hızlandıkça turuncuya döner (çok yüksek hız)
+                paint.color = if (i >= segments - 2) 0xFFFF9F43.toInt() else accent
+                rr.set(x, 0f, x + w * part, h)
+                canvas.drawRoundRect(rr, 1.5f * d, 1.5f * d, paint)
+            }
+        }
+        text.color = labelColor
+        val labels = if (bits) listOf("1K", "1M", "1G") else listOf("1K", "100K", "10M", "1G")
+        labels.forEachIndexed { i, l ->
+            val f = i.toFloat() / (labels.size - 1)
+            text.textAlign = when (i) { 0 -> Paint.Align.LEFT; labels.size - 1 -> Paint.Align.RIGHT; else -> Paint.Align.CENTER }
+            canvas.drawText(l, width * f, h + 15 * d, text)
+        }
+    }
+}
+
+/** Yatay segment çubuğu (paket gibi oranlar için). */
+class SegmentBar(c: Context, private val fraction: Float, private val color: Int, private val segments: Int = 20) : View(c) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val rr = RectF()
+    private val track = Ui.outline(c)
+    private var shown = 0f
+
+    init {
+        ValueAnimator.ofFloat(0f, fraction.coerceIn(0f, 1f)).apply {
+            duration = 800
+            startDelay = 120
+            interpolator = DecelerateInterpolator(1.6f)
+            addUpdateListener {
+                shown = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val d = resources.displayMetrics.density
+        val gap = 2.5f * d
+        val w = (width - gap * (segments - 1)) / segments
+        val filled = shown * segments
+        for (i in 0 until segments) {
+            val x = i * (w + gap)
+            rr.set(x, 0f, x + w, height.toFloat())
+            paint.color = track
+            canvas.drawRoundRect(rr, d, d, paint)
+            val part = (filled - i).coerceIn(0f, 1f)
+            if (part > 0f) {
+                paint.color = color
+                rr.set(x, 0f, x + w * part, height.toFloat())
+                canvas.drawRoundRect(rr, d, d, paint)
+            }
+        }
     }
 }

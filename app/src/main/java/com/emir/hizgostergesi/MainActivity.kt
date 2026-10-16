@@ -111,7 +111,7 @@ class MainActivity : Activity() {
     private var themeStamp = ""
     private fun themeKey(): String {
         val p = Prefs.get(this)
-        return "${p.getInt(Prefs.THEME, 0)}|${p.getBoolean(Prefs.FORCE_DARK, true)}|${p.getBoolean(Prefs.DYNAMIC_COLOR, true)}"
+        return "${p.getInt(Prefs.ACCENT_CHOICE, -1)}"
     }
 
     override fun onResume() {
@@ -143,11 +143,22 @@ class MainActivity : Activity() {
     private fun navSpace() = Ui.dp(this, 88) + bottomInset
 
     private fun buildNav(): LinearLayout {
+        // Kokpit: altta yüzen, ince çerçeveli hap; sadece simgeler (seçilende vurgu rengi ve alt nokta)
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Ui.surface(this@MainActivity))
-            elevation = Ui.dp(this@MainActivity, 6).toFloat()
+            setBackgroundColor((Ui.bg(this@MainActivity) and 0x00FFFFFF) or 0xE6000000.toInt())
         }
+        val pillRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = Ui.rounded(Ui.surface(this@MainActivity), Ui.dp(this@MainActivity, 24).toFloat(),
+                Ui.dp(this@MainActivity, 1), Ui.outline(this@MainActivity))
+            setPadding(Ui.dp(this@MainActivity, 6), Ui.dp(this@MainActivity, 4), Ui.dp(this@MainActivity, 6), Ui.dp(this@MainActivity, 4))
+        }
+        bar.addView(pillRow, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            leftMargin = Ui.dp(this@MainActivity, 16)
+            rightMargin = Ui.dp(this@MainActivity, 16)
+        })
         items.forEachIndexed { i, item ->
             val col = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -164,18 +175,18 @@ class MainActivity : Activity() {
             val icon = ImageView(this).apply { setImageResource(item.icon) }
             pill.addView(icon, FrameLayout.LayoutParams(Ui.dp(this, 22), Ui.dp(this, 22), Gravity.CENTER))
             col.addView(pill, LinearLayout.LayoutParams(Ui.dp(this, 60), Ui.dp(this, 32)))
+            // Seçili sekmenin altındaki küçük nokta (eski etiketin yerinde)
             val label = TextView(this).apply {
-                text = item.title
-                textSize = 11.5f
-                maxLines = 1
+                text = "●"
+                textSize = 6f
                 gravity = Gravity.CENTER
-                setPadding(0, Ui.dp(this@MainActivity, 4), 0, 0)
+                setPadding(0, 0, 0, Ui.dp(this@MainActivity, 2))
             }
             col.addView(label)
             pills += pill
             icons += icon
             labels += label
-            bar.addView(col, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            pillRow.addView(col, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         }
         return bar
     }
@@ -228,10 +239,9 @@ class MainActivity : Activity() {
     private fun updateNav() {
         items.indices.forEach { i ->
             val on = i == current
-            pills[i].background = if (on) Ui.rounded(Ui.accentSoft(0x33), Ui.dp(this, 16).toFloat()) else null
-            icons[i].imageTintList = ColorStateList.valueOf(if (on) Ui.accentText(this) else Ui.secondary(this))
-            labels[i].setTextColor(if (on) Ui.primary(this) else Ui.secondary(this))
-            labels[i].typeface = if (on) Ui.MEDIUM else android.graphics.Typeface.DEFAULT
+            pills[i].background = null
+            icons[i].imageTintList = ColorStateList.valueOf(if (on) Ui.accentText(this) else Themes.LABEL)
+            labels[i].setTextColor(if (on) Ui.ACCENT else 0)
         }
     }
 }

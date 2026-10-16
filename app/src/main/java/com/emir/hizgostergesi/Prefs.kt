@@ -92,6 +92,7 @@ object Prefs {
     const val PLAN_PROMO_HIDDEN = "paket_tanitim_gizli"
     const val GAME_ON = "oyun_modu"
     const val THEME = "tema"
+    const val ACCENT_CHOICE = "vurgu_rengi"
     const val N_LIVE = "canli_bildirim"
     const val OV_SNAP = "pencere_kenara_yapis"
     const val OV_LOCK = "pencere_kilitli"

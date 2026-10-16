@@ -11,56 +11,94 @@ data class Palette(
     val accent: Int, val accent2: Int, val accentText: Int, val onAccent: Int
 )
 
-/** Hazır temalar. 0 = sistem (Material You ya da klasik mavi). */
+/**
+ * Kokpit tasarımı: her zaman saf siyah zemin, hafif kartlar ve tek bir vurgu rengi.
+ * Kullanıcı sadece vurgu rengini seçer.
+ */
 object Themes {
-    const val SYSTEM = 0
-    const val AMOLED = 1
-    const val NIGHT_BLUE = 2
-    const val GRAPHITE = 3
+    const val LIME = 0
+    const val TURQUOISE = 1
+    const val BLUE = 2
+    const val ORANGE = 3
+    const val PINK = 4
 
-    val NAMES = listOf("Sistem", "AMOLED siyah", "Gece mavisi", "Grafit mor")
+    val NAMES = listOf("Limon", "Turkuaz", "Mavi", "Turuncu", "Pembe")
 
     private fun c(v: Long) = v.toInt()
 
-    private val dark = mapOf(
-        AMOLED to Palette(c(0xFF000000), c(0xFF111214), c(0xFFF2F3F5), c(0xFF8B9099), c(0xFF25282E),
-            c(0xFF2EE6C5), c(0xFF1FA9E0), c(0xFF2EE6C5), c(0xFF00201A)),
-        NIGHT_BLUE to Palette(c(0xFF0A1020), c(0xFF131B30), c(0xFFE8EEFA), c(0xFF8A97B3), c(0xFF243049),
-            c(0xFF5AA8FF), c(0xFF7B6CFF), c(0xFF8CC2FF), c(0xFF041A33)),
-        GRAPHITE to Palette(c(0xFF121016), c(0xFF1D1A23), c(0xFFEFEAF7), c(0xFF9A92A8), c(0xFF302A3A),
-            c(0xFFB48CFF), c(0xFFFF7AC6), c(0xFFC7A8FF), c(0xFF1E0A3D))
+    /** (vurgu, vurgu üstündeki yazı) */
+    private val ACCENTS = listOf(
+        c(0xFFC6FF3D) to c(0xFF121A00),
+        c(0xFF2EE6C5) to c(0xFF00201A),
+        c(0xFF5AA8FF) to c(0xFF041A33),
+        c(0xFFFF9F43) to c(0xFF2A1400),
+        c(0xFFFF5C8A) to c(0xFF2B0010)
     )
 
-    /** Telefon açık temadayken ve "hep karanlık" kapalıyken kullanılan açık hâller. */
-    private val light = mapOf(
-        AMOLED to Palette(c(0xFFF1F5F4), c(0xFFFFFFFF), c(0xFF121514), c(0xFF5B6563), c(0xFFDCE3E1),
-            c(0xFF00897B), c(0xFF0277BD), c(0xFF00796B), c(0xFFFFFFFF)),
-        NIGHT_BLUE to Palette(c(0xFFEEF2F9), c(0xFFFFFFFF), c(0xFF101828), c(0xFF56627A), c(0xFFD8DFEC),
-            c(0xFF2F6FDB), c(0xFF5B4BDB), c(0xFF2459B8), c(0xFFFFFFFF)),
-        GRAPHITE to Palette(c(0xFFF4F1F8), c(0xFFFFFFFF), c(0xFF1A1520), c(0xFF625A6E), c(0xFFE2DCEA),
-            c(0xFF7A4FD6), c(0xFFC2408E), c(0xFF6A3FC4), c(0xFFFFFFFF))
-    )
+    const val BG = 0xFF000000.toInt()
+    const val SURFACE = 0xFF0C0E10.toInt()
+    const val SURFACE_2 = 0xFF15181B.toInt()
+    const val OUTLINE = 0xFF1C1F22.toInt()
+    const val TEXT = 0xFFEDEFF2.toInt()
+    const val TEXT_2 = 0xFF8B93A1.toInt()
+    const val LABEL = 0xFF6B7280.toInt()
 
-    fun palette(theme: Int, night: Boolean): Palette? = (if (night) dark else light)[theme]
-
-    /** Önizleme için koyu takım. */
-    fun preview(theme: Int): Palette? = dark[theme]
-
-    fun current(c: Context) = Prefs.get(c).getInt(Prefs.THEME, SYSTEM)
-
-    /** Hazır tema seçili ve "hep karanlık" açıksa uygulama telefon ayarından bağımsız koyu açılır. */
-    fun forceDark(c: Context): Boolean {
-        val p = Prefs.get(c)
-        return p.getInt(Prefs.THEME, SYSTEM) != SYSTEM && p.getBoolean(Prefs.FORCE_DARK, true)
+    /** Vurgunun koyulaştırılmış hâli (dolgu ve degradeler için). */
+    private fun dim(color: Int, f: Float = 0.55f): Int {
+        val r = ((color shr 16 and 0xFF) * f).toInt()
+        val g = ((color shr 8 and 0xFF) * f).toInt()
+        val b = ((color and 0xFF) * f).toInt()
+        return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
     }
 
-    /** Etkinliğin bağlamını gerekirse karanlık moda çevirir (sistem pencereleri, iletişim kutuları da koyu olur). */
+    fun palette(theme: Int, @Suppress("UNUSED_PARAMETER") night: Boolean = true): Palette {
+        val (accent, on) = ACCENTS[theme.coerceIn(0, ACCENTS.size - 1)]
+        return Palette(BG, SURFACE, TEXT, TEXT_2, OUTLINE, accent, dim(accent), accent, on)
+    }
+
+    fun preview(theme: Int): Palette = palette(theme)
+
+    /**
+     * Seçili vurgu. Eski sürümlerden geçişte: AMOLED → turkuaz, Gece mavisi → mavi, Grafit mor → pembe.
+     */
+    fun current(c: Context): Int {
+        val p = Prefs.get(c)
+        if (!p.contains(Prefs.ACCENT_CHOICE)) {
+            val old = p.getInt(Prefs.THEME, 0)
+            val mapped = when (old) { 1 -> TURQUOISE; 2 -> BLUE; 3 -> PINK; else -> LIME }
+            p.edit().putInt(Prefs.ACCENT_CHOICE, mapped).apply()
+            return mapped
+        }
+        return p.getInt(Prefs.ACCENT_CHOICE, LIME).coerceIn(0, ACCENTS.size - 1)
+    }
+
+    /** Kokpit tasarımı her zaman karanlık. */
+    @Suppress("UNUSED_PARAMETER")
+    fun forceDark(c: Context): Boolean = true
+
+    /** Etkinliğin bağlamını karanlık moda çevirir (sistem pencereleri, iletişim kutuları da koyu olur). */
     fun wrap(base: Context): Context {
-        if (!forceDark(base)) return base
         val conf = Configuration(base.resources.configuration)
         conf.uiMode = (conf.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or Configuration.UI_MODE_NIGHT_YES
         return base.createConfigurationContext(conf)
     }
+}
+
+/** Rakamlar için sabit genişlikli yazı tipi (gömülü JetBrains Mono alt kümesi). */
+object Mono {
+    @Volatile private var regular: Typeface? = null
+    @Volatile private var medium: Typeface? = null
+    @Volatile private var bold: Typeface? = null
+
+    private fun load(c: Context, id: Int): Typeface = try {
+        c.resources.getFont(id)
+    } catch (e: Exception) {
+        Typeface.MONOSPACE
+    }
+
+    fun regular(c: Context) = regular ?: load(c, R.font.mono_regular).also { regular = it }
+    fun medium(c: Context) = medium ?: load(c, R.font.mono_medium).also { medium = it }
+    fun bold(c: Context) = bold ?: load(c, R.font.mono_bold).also { bold = it }
 }
 
 /** Uygulama içi simgeler: emojiler yerine tek tip çizgi simgeler (gömülü Material Symbols alt kümesi). */

@@ -9,13 +9,14 @@
 
     <TextView
         android:id="@+id/wl_speed"
+        android:fontFamily="@font/mono_medium"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:maxLines="1"
         android:text="↓ —    ↑ —"
         android:textColor="#FFFFFF"
         android:textSize="20sp"
-        android:textStyle="bold" />
+         />
 
     <ImageView
         android:id="@+id/wl_graph"

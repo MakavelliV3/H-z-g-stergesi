@@ -25,8 +25,8 @@ class AppDetailActivity : Activity() {
         const val EXTRA_UID = "uid"
     }
 
-    private val mobileColor = 0xFFFF9800.toInt()
-    private val wifiColor = 0xFF2196F3.toInt()
+    private val mobileColor get() = Ui.MOBILE
+    private val wifiColor get() = Ui.WIFI
 
     private lateinit var head: LinearLayout
     private lateinit var chart: BarChart
@@ -114,7 +114,7 @@ class AppDetailActivity : Activity() {
         if (current > 0) {
             val ratio = today.toDouble() / Fmt.mbToBytes(current)
             limitBox.addView(Ui.text(this, "Bugün ${Fmt.bytes(today)} / ${Fmt.mb(current)}", 15f, topDp = 8).apply { typeface = Ui.MEDIUM })
-            limitBox.addView(PercentBar(this, ratio.toFloat(), if (ratio >= 1) 0xFFE53935.toInt() else Ui.ACCENT),
+            limitBox.addView(PercentBar(this, ratio.toFloat(), if (ratio >= 1) 0xFFFF6B6B.toInt() else Ui.ACCENT),
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 8)).apply { topMargin = Ui.dp(this@AppDetailActivity, 4) })
         }
         val pkg = packageManager.getPackagesForUid(uid)?.firstOrNull()
@@ -150,7 +150,7 @@ class AppDetailActivity : Activity() {
         head.addView(Ui.text(this, "Son 30 günde ${Fmt.bytes(a.total)}", 17f, bold = true, topDp = 12, color = Ui.accentText(this)))
         if (a.heavyUploader) {
             head.addView(Ui.text(this, "⬆ Bu uygulama aldığından fazla veri gönderiyor (${Fmt.bytes(a.tx)} gönderdi, ${Fmt.bytes(a.rx)} aldı).",
-                14f, color = 0xFFF44336.toInt()))
+                14f, color = 0xFFFF6B6B.toInt()))
         }
 
         // Grafik

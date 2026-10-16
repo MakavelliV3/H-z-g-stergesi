@@ -39,71 +39,55 @@ import android.widget.TextView
  * Material You açıksa renkler telefonun duvar kâğıdından gelir (Android 12+).
  */
 object Ui {
-    var ACCENT = 0xFF4F8CFF.toInt()
-    var ACCENT_2 = 0xFF7B5CFF.toInt()
+    var ACCENT = 0xFFC6FF3D.toInt()
+    var ACCENT_2 = 0xFF6D8C22.toInt()
     /** Vurgu renginin üstündeki yazı rengi (açık vurgu renklerinde koyu). */
-    var ON_ACCENT = Color.WHITE
-    private var dynamic = false
-    private var theme = Themes.SYSTEM
+    var ON_ACCENT = 0xFF121A00.toInt()
+    private var pal: Palette = Themes.palette(Themes.LIME)
 
-    /** Hazır temanın şu anki (açık/koyu) renk takımı; sistem temasında null. */
-    private fun pal(c: Context): Palette? = if (theme == Themes.SYSTEM) null else Themes.palette(theme, night(c))
-
-    /** Hazır tema mı (gösterge kartı gibi yerler buna göre çizilir). */
-    fun themed() = theme != Themes.SYSTEM
+    /** Kokpit tasarımında her zaman true (eski kodla uyum için). */
+    fun themed() = true
 
     val MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
-    /** Uygulama açılışında ve tema değişince çağrılır. */
+    /** Uygulama açılışında ve vurgu rengi değişince çağrılır. */
     fun init(c: Context) {
         Fmt.base = if (Prefs.get(c).getInt(Prefs.UNIT_BASE, 1000) == 1024) 1024L else 1000L
-        theme = Prefs.get(c).getInt(Prefs.THEME, Themes.SYSTEM)
-        dynamic = theme == Themes.SYSTEM && Build.VERSION.SDK_INT >= 31 && Prefs.get(c).getBoolean(Prefs.DYNAMIC_COLOR, true)
-        ON_ACCENT = Color.WHITE
-        val p = pal(c)
-        if (p != null) {
-            ACCENT = p.accent
-            ACCENT_2 = p.accent2
-            ON_ACCENT = p.onAccent
-        } else if (dynamic && Build.VERSION.SDK_INT >= 31) {
-            ACCENT = c.getColor(android.R.color.system_accent1_600)
-            ACCENT_2 = c.getColor(android.R.color.system_accent3_500)
-        } else {
-            ACCENT = 0xFF4F8CFF.toInt()
-            ACCENT_2 = 0xFF7B5CFF.toInt()
-        }
+        pal = Themes.palette(Themes.current(c))
+        ACCENT = pal.accent
+        ACCENT_2 = pal.accent2
+        ON_ACCENT = pal.onAccent
     }
-
-    private fun sys(c: Context, id: Int, fallback: Int): Int =
-        if (dynamic && Build.VERSION.SDK_INT >= 31) c.getColor(id) else fallback
 
     fun dp(c: Context, v: Int) = (v * c.resources.displayMetrics.density).toInt()
 
-    fun night(c: Context) =
-        (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    /** Kokpit tasarımı hep karanlık. */
+    @Suppress("UNUSED_PARAMETER")
+    fun night(c: Context) = true
 
-    fun bg(c: Context) = pal(c)?.bg ?: if (night(c)) sys(c, android.R.color.system_neutral1_900, 0xFF0E1014.toInt())
-    else sys(c, android.R.color.system_neutral1_50, 0xFFF2F3F7.toInt())
+    @Suppress("UNUSED_PARAMETER") fun bg(c: Context) = pal.bg
+    @Suppress("UNUSED_PARAMETER") fun surface(c: Context) = pal.surface
+    @Suppress("UNUSED_PARAMETER") fun primary(c: Context) = pal.primary
+    @Suppress("UNUSED_PARAMETER") fun secondary(c: Context) = pal.secondary
+    @Suppress("UNUSED_PARAMETER") fun outline(c: Context) = pal.outline
+    /** Küçük büyük harfli etiketler için soluk gri. */
+    @Suppress("UNUSED_PARAMETER") fun labelColor(c: Context) = Themes.LABEL
+    @Suppress("UNUSED_PARAMETER") fun accentText(c: Context): Int = pal.accentText
 
-    fun surface(c: Context) = pal(c)?.surface ?: if (night(c)) sys(c, android.R.color.system_neutral1_800, 0xFF1A1D24.toInt())
-    else sys(c, android.R.color.system_neutral1_10, 0xFFFFFFFF.toInt())
+    /** Mobil veri ve Wi-Fi için grafik renkleri: mobil vurgu rengi, Wi-Fi ona uyan ikinci renk. */
+    val MOBILE get() = ACCENT
+    val WIFI get() = if (ACCENT == Themes.palette(Themes.BLUE).accent) 0xFF2EE6C5.toInt() else 0xFF7AA7FF.toInt()
 
-    fun primary(c: Context) = pal(c)?.primary ?: if (night(c)) sys(c, android.R.color.system_neutral1_50, 0xFFF1F3F7.toInt())
-    else sys(c, android.R.color.system_neutral1_900, 0xFF15171C.toInt())
-
-    fun secondary(c: Context) = pal(c)?.secondary ?: if (night(c)) sys(c, android.R.color.system_neutral2_200, 0xFF9AA1AD.toInt())
-    else sys(c, android.R.color.system_neutral2_600, 0xFF5E6573.toInt())
-
-    fun outline(c: Context) = pal(c)?.outline ?: if (night(c)) sys(c, android.R.color.system_neutral2_700, 0xFF2C313B.toInt())
-    else sys(c, android.R.color.system_neutral2_100, 0xFFDDE0E6.toInt())
-
-    /**
-     * Yazı ve simgeler için vurgu rengi: koyu temada daha açık tonu kullanılır,
-     * yoksa koyu zemin üstünde koyu mavi okunmaz.
-     */
-    fun accentText(c: Context): Int = pal(c)?.accentText ?: if (night(c)) {
-        if (dynamic && Build.VERSION.SDK_INT >= 31) c.getColor(android.R.color.system_accent1_200) else 0xFF9DBBFF.toInt()
-    } else ACCENT
+    /** Sabit genişlikli rakam yazısı uygular. */
+    fun mono(tv: TextView, weight: Int = 1): TextView {
+        tv.typeface = when (weight) {
+            0 -> Mono.regular(tv.context)
+            2 -> Mono.bold(tv.context)
+            else -> Mono.medium(tv.context)
+        }
+        tv.fontFeatureSettings = "tnum"
+        return tv
+    }
 
     /** Vurgu renginin hafif (saydam) hâli. */
     fun accentSoft(alpha: Int = 0x26) = (ACCENT and 0x00FFFFFF) or (alpha shl 24)
@@ -141,12 +125,12 @@ object Ui {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(a, 18), dp(a, 6), dp(a, 6), dp(a, 6))
-            background = rounded(primary(a), dp(a, 18).toFloat())
+            background = rounded(Themes.SURFACE_2, dp(a, 14).toFloat(), dp(a, 1), outline(a))
             elevation = dp(a, 6).toFloat()
             addView(TextView(a).apply {
                 text = message
                 textSize = 14f
-                setTextColor(bg(a))
+                setTextColor(primary(a))
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         }
         val dismiss = Runnable {
@@ -156,7 +140,7 @@ object Ui {
             text = "Geri al"
             textSize = 14f
             typeface = MEDIUM
-            setTextColor(if (night(a)) 0xFF1A56DB.toInt() else 0xFF9DBBFF.toInt())
+            setTextColor(ACCENT)
             setPadding(dp(a, 14), dp(a, 10), dp(a, 14), dp(a, 10))
             isClickable = true
             setOnClickListener {
@@ -310,11 +294,12 @@ object Ui {
         return LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
-            background = rounded(surface(c), dp(c, 24).toFloat())
+            background = rounded(surface(c), dp(c, 16).toFloat())
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(c, 12) }
+            ).apply { bottomMargin = dp(c, 8) }
             if (title != null) {
+                // Kokpit başlığı: küçük vurgu simgesi + aralıklı büyük harf etiket
                 val head = LinearLayout(c).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
@@ -322,17 +307,17 @@ object Ui {
                 }
                 if (icon != null) {
                     head.addView(TextView(c).apply {
-                        textSize = 20f
+                        textSize = 16f
                         gravity = Gravity.CENTER
                         Icons.apply(this, icon, accentText(c))
-                        background = rounded(accentSoft(), dp(c, 18).toFloat())
-                    }, LinearLayout.LayoutParams(dp(c, 36), dp(c, 36)).apply { rightMargin = dp(c, 12) })
+                    }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { rightMargin = dp(c, 8) })
                 }
                 head.addView(TextView(c).apply {
-                    text = title
-                    textSize = 17f
+                    text = title.uppercase(java.util.Locale("tr", "TR"))
+                    textSize = 12f
                     typeface = MEDIUM
-                    setTextColor(primary(c))
+                    letterSpacing = 0.09f
+                    setTextColor(labelColor(c))
                 })
                 addView(head)
             }
@@ -352,9 +337,9 @@ object Ui {
     }
 
     // Türkçe büyük harf: "i" → "İ" (Locale.ROOT "I" yapardı)
-    fun label(c: Context, s: String) = text(c, s.uppercase(java.util.Locale("tr", "TR")), 12f, topDp = 12, color = secondary(c)).apply {
+    fun label(c: Context, s: String) = text(c, s.uppercase(java.util.Locale("tr", "TR")), 11f, topDp = 12, color = labelColor(c)).apply {
         typeface = MEDIUM
-        letterSpacing = 0.06f
+        letterSpacing = 0.09f
     }
 
     fun header(c: Context, s: String) = text(c, s, 19f, bold = true, topDp = 18)
@@ -370,7 +355,8 @@ object Ui {
         setTextColor(if (filled) ON_ACCENT else accentText(c))
         val v = dp(c, 13)
         setPadding(v, v, v, v)
-        background = ripple(rounded(if (filled) ACCENT else accentSoft(), dp(c, 50).toFloat()))
+        background = ripple(if (filled) rounded(ACCENT, dp(c, 14).toFloat())
+            else rounded(0, dp(c, 14).toFloat(), dp(c, 1), outline(c)))
         isClickable = true
         pressable(this, 0.96f)
         setOnClickListener {
@@ -385,7 +371,7 @@ object Ui {
     /** Seçenekler hap düğmeler olarak; sığmazsa alt satıra geçer. */
     fun <T> choiceRow(c: Context, options: List<Pair<String, T>>, current: T, onPick: (T) -> Unit): View {
         val flow = FlowLayout(c, dp(c, 8), dp(c, 8)).apply { setPadding(0, dp(c, 4), 0, dp(c, 6)) }
-        val radius = dp(c, 50).toFloat()
+        val radius = dp(c, 12).toFloat()
         val selected = arrayOf(android.R.attr.state_selected)
         val chips = ArrayList<TextView>()
         options.forEach { (label, value) ->
@@ -420,8 +406,8 @@ object Ui {
         textSize = 15f
         setTextColor(primary(c))
         isChecked = checked
-        thumbTintList = ColorStateList(checkedStates, intArrayOf(ACCENT, 0xFFBDBDBD.toInt()))
-        trackTintList = ColorStateList(checkedStates, intArrayOf(accentSoft(0x80), 0x40888888))
+        thumbTintList = ColorStateList(checkedStates, intArrayOf(ACCENT, 0xFF5B616B.toInt()))
+        trackTintList = ColorStateList(checkedStates, intArrayOf(accentSoft(0x66), 0xFF1C1F22.toInt()))
         setPadding(0, dp(c, 9), 0, dp(c, 9))
         setOnCheckedChangeListener { b, v ->
             b.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -463,11 +449,19 @@ object Ui {
         setPadding(dp(c, 4), dp(c, 8), dp(c, 4), dp(c, 14))
         addView(TextView(c).apply {
             text = title
-            textSize = 30f
-            typeface = Typeface.DEFAULT_BOLD
+            textSize = 28f
+            typeface = MEDIUM
+            letterSpacing = -0.01f
             setTextColor(primary(c))
         })
-        if (subtitle != null) addView(hint(c, subtitle).apply { textSize = 14f })
+        if (subtitle != null) addView(TextView(c).apply {
+            text = subtitle.uppercase(java.util.Locale("tr", "TR"))
+            textSize = 11f
+            typeface = MEDIUM
+            letterSpacing = 0.09f
+            setTextColor(labelColor(c))
+            setPadding(0, dp(c, 2), 0, 0)
+        })
     }
 
     /** Boş durum: simge, başlık, açıklama ve isteğe bağlı düğme. */
@@ -480,7 +474,7 @@ object Ui {
                 textSize = 32f
                 gravity = Gravity.CENTER
                 Icons.apply(this, icon, accentText(c))
-                background = rounded(accentSoft(), dp(c, 32).toFloat())
+                background = rounded(0, dp(c, 16).toFloat(), dp(c, 1), outline(c))
             }, LinearLayout.LayoutParams(dp(c, 64), dp(c, 64)).apply { bottomMargin = dp(c, 12) })
             addView(text(c, title, 16f).apply {
                 typeface = MEDIUM
@@ -518,7 +512,7 @@ object Ui {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(c, 14), 0, dp(c, 14), 0)
-            background = rounded(surface(c), dp(c, 50).toFloat())
+            background = rounded(surface(c), dp(c, 14).toFloat())
             layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(c, 50)).apply {
                 bottomMargin = dp(c, 12)
             }
@@ -562,7 +556,7 @@ object Ui {
                 textSize = 22f
                 gravity = Gravity.CENTER
                 Icons.apply(this, icon, accentText(c))
-                background = rounded(accentSoft(), dp(c, 20).toFloat())
+                background = rounded(0, dp(c, 12).toFloat(), dp(c, 1), outline(c))
             }, LinearLayout.LayoutParams(dp(c, 40), dp(c, 40)).apply { rightMargin = dp(c, 14) })
             val texts = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
             texts.addView(text(c, title, 16f).apply {
@@ -604,12 +598,11 @@ object Ui {
             orientation = VERTICAL
             val pad = Ui.dp(c, 14)
             setPadding(pad, pad, pad, pad)
-            background = Ui.rounded(Ui.surface(c), Ui.dp(c, 22).toFloat())
             this.title = Ui.label(c, title).apply { setPadding(0, 0, 0, Ui.dp(c, 4)) }
             addView(this.title)
             isClickable = true
-            background = Ui.ripple(Ui.rounded(Ui.surface(c), Ui.dp(c, 22).toFloat()))
-            value = Ui.text(c, "—", 20f, bold = true)
+            background = Ui.ripple(Ui.rounded(Ui.surface(c), Ui.dp(c, 16).toFloat()))
+            value = Ui.mono(Ui.text(c, "—", 21f))
             sub = Ui.hint(c, "")
             addView(value)
             addView(sub)
@@ -621,8 +614,8 @@ object Ui {
         orientation = LinearLayout.HORIZONTAL
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(c, 12) }
-        addView(left, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { rightMargin = dp(c, 6) })
-        addView(right, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { leftMargin = dp(c, 6) })
+        ).apply { bottomMargin = dp(c, 8) }
+        addView(left, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { rightMargin = dp(c, 4) })
+        addView(right, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f).apply { leftMargin = dp(c, 4) })
     }
 }

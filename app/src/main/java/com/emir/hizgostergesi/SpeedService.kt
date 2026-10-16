@@ -684,7 +684,7 @@ class SpeedService : Service() {
     private fun createOverlay(): TextView? {
         val d = resources.displayMetrics.density
         val tv = TextView(this).apply {
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = Mono.medium(this@SpeedService)
             setPadding((10 * d).toInt(), (5 * d).toInt(), (10 * d).toInt(), (5 * d).toInt())
             background = GradientDrawable().apply { cornerRadius = 12 * d }
         }

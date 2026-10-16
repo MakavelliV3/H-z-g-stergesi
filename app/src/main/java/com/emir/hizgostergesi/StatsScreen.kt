@@ -11,8 +11,8 @@ import java.util.Locale
 /** İstatistik: bugün (mobil/Wi-Fi ayrı), 7/30 gün, aylık ve yıllık raporlar, dokunulabilir grafik. */
 class StatsScreen(a: MainActivity) : Screen(a) {
 
-    private val mobileColor = 0xFFFF9800.toInt()
-    private val wifiColor = 0xFF2196F3.toInt()
+    private val mobileColor get() = Ui.MOBILE
+    private val wifiColor get() = Ui.WIFI
     private val tr = Locale("tr")
 
     private lateinit var todayMobile: Ui.StatTile

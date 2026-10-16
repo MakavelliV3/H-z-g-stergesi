@@ -230,8 +230,8 @@ class AppsScreen(a: MainActivity) : Screen(a) {
         if (b < 1_000_000L) return if (now >= 5_000_000L) "yeni" to Ui.ACCENT else null
         val pct = ((now - b) * 100 / b).toInt()
         return when {
-            pct >= 5 -> "↑ %$pct" to 0xFFE53935.toInt()
-            pct <= -5 -> "↓ %${-pct}" to 0xFF2E7D32.toInt()
+            pct >= 5 -> "↑ %$pct" to 0xFFFF6B6B.toInt()
+            pct <= -5 -> "↓ %${-pct}" to 0xFF4ADE80.toInt()
             else -> null
         }
     }
@@ -271,7 +271,7 @@ class AppsScreen(a: MainActivity) : Screen(a) {
 
         // İlk 5 halka grafiği (arama yokken)
         if (query.isEmpty()) {
-            val palette = intArrayOf(Ui.ACCENT, Ui.ACCENT_2, 0xFFFF9800.toInt(), 0xFF4CAF50.toInt(), 0xFFE91E63.toInt(), 0xFF9E9E9E.toInt())
+            val palette = intArrayOf(Ui.ACCENT, 0xFF7AA7FF.toInt(), 0xFFFF9F43.toInt(), 0xFFFF5C8A.toInt(), 0xFFB48CFF.toInt(), 0xFF6B7280.toInt())
             val top5 = list.sortedByDescending { value(it) }.take(5)
             val rest = total - top5.sumOf { value(it) }
             val slices = top5.mapIndexed { i, u -> value(u) to palette[i] } + (if (rest > 0) listOf(rest to palette[5]) else emptyList())

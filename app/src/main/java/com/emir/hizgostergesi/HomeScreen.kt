@@ -22,8 +22,15 @@ import java.util.Locale
 class HomeScreen(a: MainActivity) : Screen(a) {
 
     private lateinit var connChip: TextView
-    private lateinit var gauge: SpeedGauge
+    private lateinit var gauge: SegmentGauge
+    private lateinit var bigNum: TextView
+    private lateinit var bigUnit: TextView
     private lateinit var upText: TextView
+    private lateinit var sigText: TextView
+    private lateinit var sigSub: TextView
+    private lateinit var peakNum: TextView
+    private var shownDown = 0L
+    private var numAnim: android.animation.ValueAnimator? = null
     private lateinit var spark: Sparkline
     private lateinit var health: LinearLayout
 
@@ -50,16 +57,15 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             setPadding(dp(4), dp(8), dp(4), dp(14))
         }
         val titles = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        titles.addView(Ui.text(a, "Hız Göstergesi", 28f, bold = true).apply { setPadding(0, 0, 0, 0) })
-        titles.addView(Ui.hint(a, SimpleDateFormat("d MMMM EEEE", Locale("tr")).format(Date())))
+        titles.addView(Ui.label(a, "Hız Göstergesi").apply { setPadding(0, 0, 0, 0) })
+        titles.addView(Ui.hint(a, SimpleDateFormat("d MMMM EEEE", Locale("tr")).format(Date())).apply { setPadding(0, dp(2), 0, 0) })
         head.addView(titles, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        connChip = TextView(a).apply {
-            textSize = 13f
-            typeface = Ui.MEDIUM
+        connChip = Ui.mono(TextView(a).apply {
+            textSize = 12f
             setTextColor(Ui.accentText(a))
-            setPadding(dp(14), dp(7), dp(14), dp(7))
-            background = Ui.rounded(Ui.accentSoft(), dp(50).toFloat())
-        }
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+            background = Ui.rounded(0, dp(12).toFloat(), dp(1), Ui.outline(a))
+        })
         head.addView(connChip)
         root.addView(head)
 
@@ -109,46 +115,90 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         })
     }
 
-    private fun heroCard(): View = LinearLayout(a).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(18), dp(18), dp(18), dp(14))
-        // Hazır temalarda koyu kart üstünde renkli gösterge, sistem temasında renkli degrade kart
-        val themed = Ui.themed()
-        val fg = if (themed) Ui.primary(a) else Color.WHITE
-        val muted = if (themed) Ui.secondary(a) else 0xB3FFFFFF.toInt()
-        background = if (themed) Ui.rounded(Ui.surface(a), dp(28).toFloat(), dp(1), Ui.outline(a))
-        else GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Ui.ACCENT, Ui.ACCENT_2))
-            .apply { cornerRadius = dp(28).toFloat() }
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(12) }
-
-        gauge = SpeedGauge(a).apply {
-            colorful = themed
-            this.fg = fg
-            this.muted = muted
-            if (themed) {
-                track = Ui.outline(a)
-                // Yavaşta temanın ikinci rengi, hızlandıkça ana vurgu rengi (AMOLED: mavi → turkuaz)
-                slowColor = Ui.ACCENT_2
-                midColor = Ui.ACCENT
-                accent = Ui.accentText(a)
-            }
+    /** Kokpit göstergesi: dev rakam, segment çubuk, yükleme / sinyal / rekor ve son 60 saniye. */
+    private fun heroCard(): View = Ui.card(a).apply {
+        setPadding(dp(18), dp(16), dp(18), dp(12))
+        addView(Ui.label(a, "İndirme").apply { setPadding(0, 0, 0, dp(2)) })
+        val numRow = LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.BOTTOM
         }
-        addView(gauge, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            leftMargin = dp(24)
-            rightMargin = dp(24)
+        bigNum = Ui.mono(TextView(a).apply {
+            text = "0"
+            textSize = 60f
+            setTextColor(Ui.primary(a))
+            letterSpacing = -0.04f
+            includeFontPadding = false
         })
-        upText = TextView(a).apply {
-            textSize = 15f
-            typeface = Ui.MEDIUM
-            setTextColor(if (themed) Ui.secondary(a) else 0xE6FFFFFF.toInt())
-            gravity = Gravity.CENTER
+        bigUnit = Ui.mono(TextView(a).apply {
+            text = "KB/s"
+            textSize = 16f
+            setTextColor(Ui.accentText(a))
+            setPadding(dp(8), 0, 0, dp(8))
+        })
+        numRow.addView(bigNum)
+        numRow.addView(bigUnit)
+        addView(numRow)
+        gauge = SegmentGauge(a)
+        addView(gauge, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(12)
+        })
+        // Üç sütun: yükleme, sinyal, rekor (aralarında ince çizgiler)
+        val row = LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(10), 0, dp(10))
         }
-        addView(upText)
-        spark = Sparkline(a).apply { if (themed) lineColor = Ui.ACCENT }
-        addView(spark, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52)).apply { topMargin = dp(10) })
-        addView(Ui.text(a, "Son 60 saniye", 12f, topDp = 4, color = muted).apply { gravity = Gravity.CENTER })
+        fun column(title: String, gravityEnd: Boolean = false): Pair<TextView, TextView> {
+            val col = LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = if (gravityEnd) Gravity.END else Gravity.START
+            }
+            col.addView(Ui.label(a, title).apply { setPadding(0, 0, 0, dp(2)) })
+            val v = Ui.mono(TextView(a).apply {
+                textSize = 16f
+                setTextColor(Ui.primary(a))
+            })
+            val sub = Ui.mono(TextView(a).apply {
+                textSize = 11f
+                setTextColor(Themes.LABEL)
+            }, 0)
+            col.addView(v)
+            col.addView(sub)
+            row.addView(col, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            return v to sub
+        }
+        upText = column("Yükleme").first
+        val sig = column("Sinyal")
+        sigText = sig.first
+        sigSub = sig.second
+        peakNum = column("Rekor", gravityEnd = true).first
+        addView(Ui.divider(a))
+        addView(row)
+        addView(Ui.divider(a))
+        spark = Sparkline(a).apply { lineColor = Ui.ACCENT }
+        addView(spark, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)).apply { topMargin = dp(10) })
+        addView(Ui.label(a, "Son 60 saniye").apply {
+            gravity = Gravity.END
+            setPadding(0, dp(4), 0, 0)
+        })
+    }
+
+    /** Büyük rakamı sayarak günceller. */
+    private fun showDown(bps: Long, bits: Boolean) {
+        val from = shownDown
+        numAnim?.cancel()
+        numAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 450
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener {
+                val v = (from + (bps - from) * (it.animatedValue as Float)).toLong()
+                shownDown = v
+                val (num, unit) = Fmt.speedParts(v, bits)
+                bigNum.text = num
+                bigUnit.text = unit
+            }
+            start()
+        }
     }
 
     private fun openSettings(cat: String) {
@@ -165,11 +215,16 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val bits = prefs.getBoolean(Prefs.UNIT_BITS, false)
         gauge.bits = bits
         gauge.setSpeed(SpeedService.lastDown)
-        upText.text = "↑ Yükleme ${Fmt.speed(SpeedService.lastUp, bits)}"
+        showDown(SpeedService.lastDown, bits)
+        upText.text = Fmt.speed(SpeedService.lastUp, bits)
         spark.data = SpeedService.recent()
-        connChip.text = ConnInfo.label.ifEmpty { "Bağlantı yok" }
+        connChip.text = "● " + ConnInfo.label.ifEmpty { "Bağlantı yok" }
+        val (dbm, level) = ConnInfo.signal()
+        sigText.text = if (dbm != null) "$dbm dBm" else "—"
+        sigSub.text = if (level >= 0) "▮".repeat(level) + "▯".repeat(4 - level.coerceAtMost(4)) else ""
 
         val today = StatsStore.today(a)
+        peakNum.text = Fmt.speed(maxOf(today.peakMobile, today.peakWifi), bits)
         tileToday.value.text = Fmt.bytes(today.mobile + today.wifi)
         tileToday.sub.text = "Mobil ${Fmt.bytes(today.mobile)}\nWi-Fi ${Fmt.bytes(today.wifi)}"
 
@@ -196,7 +251,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             val ratio = used.toDouble() / Fmt.mbToBytes(quotaMb)
             quotaBar.visibility = View.VISIBLE
             quotaBar.progress = (ratio * 1000).toInt().coerceIn(0, 1000)
-            quotaBar.progressTintList = ColorStateList.valueOf(if (ratio >= 1) 0xFFE53935.toInt() else Ui.ACCENT)
+            quotaBar.progressTintList = ColorStateList.valueOf(if (ratio >= 1) 0xFFFF6B6B.toInt() else Ui.ACCENT)
             tilePeriod.sub.text = "Sınır doluluğu: %${(ratio * 100).toInt()}\n$left sonra sıfırlanır"
         } else {
             quotaBar.visibility = View.GONE
@@ -251,25 +306,53 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             Ui.pressable(this, 0.98f)
             setOnClickListener { open() }
         }
-        val ringColor = when {
+        val barColor = when {
             s.ratio >= 1 -> 0xFFE5484D.toInt()
-            s.ratio >= 0.8 -> 0xFFF5A524.toInt()
+            s.ratio >= 0.8 -> 0xFFFF9F43.toInt()
             else -> Ui.ACCENT
         }
-        val row = LinearLayout(a).apply {
+        // Büyük kalan miktar + gün
+        val top = LinearLayout(a).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            gravity = Gravity.BOTTOM
         }
-        row.addView(RingProgress(a, s.ratio.toFloat(), ringColor,
-            if (over) "+" + Fmt.bytes(s.used - s.limit) else Fmt.bytes(s.remaining),
-            if (over) "aşıldı" else "kaldı"), LinearLayout.LayoutParams(dp(124), dp(124)).apply { rightMargin = dp(16) })
-        val facts = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        facts.addView(Ui.text(a, "%${(s.ratio * 100).toInt().coerceAtMost(999)} kullanıldı", 17f).apply { typeface = Ui.MEDIUM })
-        facts.addView(Ui.hint(a, "${Fmt.bytes(s.used)} / ${Fmt.bytes(s.limit)}"))
-        facts.addView(Ui.text(a, "$days gün kaldı", 15f, topDp = 6, color = Ui.accentText(a)).apply { typeface = Ui.MEDIUM })
-        if (!over) facts.addView(Ui.hint(a, "Günde ~${Fmt.bytes(PlanMath.dailyAllowance(s.remaining, now, s.end))} kullanabilirsin"))
-        row.addView(facts, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        card.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+        top.addView(Ui.mono(TextView(a).apply {
+            text = if (over) "+" + Fmt.bytes(s.used - s.limit) else Fmt.bytes(s.remaining)
+            textSize = 30f
+            includeFontPadding = false
+            setTextColor(if (over) barColor else Ui.primary(a))
+        }))
+        top.addView(Ui.label(a, if (over) "aşıldı" else "kaldı").apply { setPadding(dp(8), 0, 0, dp(4)) },
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        top.addView(Ui.mono(TextView(a).apply {
+            text = "$days gün"
+            textSize = 15f
+            setTextColor(Ui.accentText(a))
+            setPadding(0, 0, 0, dp(2))
+        }))
+        card.addView(top)
+        card.addView(SegmentBar(a, s.ratio.toFloat(), barColor), LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(10)).apply {
+            topMargin = dp(10)
+            bottomMargin = dp(8)
+        })
+        // Kullanılan / paket / günlük pay: üç sütun
+        val facts = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
+        fun fact(label: String, value: String, end: Boolean = false) {
+            facts.addView(LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = if (end) Gravity.END else Gravity.START
+                addView(Ui.label(a, label).apply { setPadding(0, dp(4), 0, dp(2)) })
+                addView(Ui.mono(TextView(a).apply {
+                    text = value
+                    textSize = 14f
+                    setTextColor(Ui.primary(a))
+                }))
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        fact("Kullanılan", "%${(s.ratio * 100).toInt().coerceAtMost(999)}")
+        fact("Paket", Fmt.bytes(s.limit))
+        fact("Günlük pay", if (over) "—" else Fmt.bytes(PlanMath.dailyAllowance(s.remaining, now, s.end)), end = true)
+        card.addView(facts, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = dp(8)
         })
         val forecast = PlanMath.forecast(s.used, s.start, now, s.end)

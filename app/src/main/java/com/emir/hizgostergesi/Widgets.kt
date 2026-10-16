@@ -82,7 +82,7 @@ object Widgets {
                     setViewVisibility(R.id.wl_bar, View.VISIBLE)
                     setProgressBar(R.id.wl_bar, 1000, (plan.ratio * 1000).toInt().coerceIn(0, 1000), false)
                     if (android.os.Build.VERSION.SDK_INT >= 31) setColorStateList(R.id.wl_bar, "setProgressTintList", android.content.res.ColorStateList.valueOf(
-                        if (plan.ratio >= 1.0) 0xFFE5484D.toInt() else if (plan.ratio >= 0.8) 0xFFF5A524.toInt() else color))
+                        if (plan.ratio >= 1.0) 0xFFE5484D.toInt() else if (plan.ratio >= 0.8) 0xFFF5A524.toInt() else Ui.ACCENT))
                 } else {
                     val label = SpeedService.rollLabel
                     setTextViewText(R.id.wl_extra, if (label.isNotEmpty()) "$label  ${Fmt.bytes(SpeedService.rollValue)}" else "")
@@ -91,7 +91,7 @@ object Widgets {
                 setTextColor(R.id.wl_speed, color)
                 setTextColor(R.id.wl_today, color)
                 setTextColor(R.id.wl_extra, color)
-                setImageViewBitmap(R.id.wl_graph, graph(SpeedService.recent(), color))
+                setImageViewBitmap(R.id.wl_graph, graph(SpeedService.recent(), Ui.ACCENT))
                 setOnClickPendingIntent(R.id.wl_root, open(c))
                 setInt(R.id.wl_root, "setBackgroundResource", background(c))
             }

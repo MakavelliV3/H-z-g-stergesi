@@ -10,16 +10,18 @@
 
     <TextView
         android:id="@+id/ws_value"
+        android:fontFamily="@font/mono_medium"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:maxLines="1"
         android:text="—"
         android:textColor="#FFFFFF"
         android:textSize="22sp"
-        android:textStyle="bold" />
+         />
 
     <TextView
         android:id="@+id/ws_unit"
+        android:fontFamily="@font/mono_regular"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:maxLines="1"
@@ -29,6 +31,7 @@
 
     <TextView
         android:id="@+id/ws_today"
+        android:fontFamily="@font/mono_regular"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"

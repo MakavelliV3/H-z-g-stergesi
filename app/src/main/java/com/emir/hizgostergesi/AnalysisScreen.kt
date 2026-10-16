@@ -19,8 +19,8 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
     private val days = arrayOf("Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz")
     private val dayNames = arrayOf("Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar")
     private val categoryColors = intArrayOf(
-        0xFF4F8CFF.toInt(), 0xFF7B5CFF.toInt(), 0xFFFF9800.toInt(), 0xFF4CAF50.toInt(), 0xFFE91E63.toInt(),
-        0xFF00BCD4.toInt(), 0xFFFFC107.toInt(), 0xFF9E9E9E.toInt()
+        Ui.ACCENT, 0xFF7AA7FF.toInt(), 0xFFFF9F43.toInt(), 0xFFFF5C8A.toInt(), 0xFF2EE6C5.toInt(),
+         0xFFB48CFF.toInt(), 0xFFFFD166.toInt(), 0xFF6B7280.toInt()
     )
 
     private lateinit var compareBox: LinearLayout
@@ -286,7 +286,7 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
         val all = withData.sumOf { it.second + it.third }.coerceAtLeast(1L)
         val pct = mob * 100 / all
         habitBox.addView(Ui.text(a, "Mobil veri payı: %$pct", 15f, topDp = 8).apply { typeface = Ui.MEDIUM })
-        habitBox.addView(PercentBar(a, pct / 100f, 0xFFFF9800.toInt()),
+        habitBox.addView(PercentBar(a, pct / 100f, Ui.ACCENT),
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(a, 8)).apply { topMargin = Ui.dp(a, 4) })
         habitBox.addView(Ui.hint(a, "Kalanı Wi-Fi: mobil ${Fmt.bytes(mob)} • Wi-Fi ${Fmt.bytes(all - mob)}"))
     }
@@ -354,7 +354,7 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
         sum.entries.sortedBy { order.indexOf(it.key).let { i -> if (i < 0) 99 else i } }.forEach { (k, v) ->
             if (v.bytes == 0L) return@forEach
             val pct = v.bytes * 100.0 / total
-            val color = if (k == "Wi-Fi" || k == "Ethernet") 0xFF2196F3.toInt() else 0xFFFF9800.toInt()
+            val color = if (k == "Wi-Fi" || k == "Ethernet") Ui.WIFI else Ui.MOBILE
             val line = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
             line.addView(Ui.text(a, k, 15f, bold = true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             line.addView(Ui.text(a, "${Fmt.bytes(v.bytes)} · %${"%.0f".format(pct)}", 14f, color = Ui.secondary(a)))
@@ -428,7 +428,7 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
         }
         val avg = LongArray(24) { if (sec[it] >= 30) (bytes[it] / sec[it]).toLong() else 0L }
         val bits = Prefs.get(a).getBoolean(Prefs.UNIT_BITS, false)
-        speedChart.mobileColor = if (speedMobile) 0xFFFF9800.toInt() else 0xFF2196F3.toInt()
+        speedChart.mobileColor = if (speedMobile) Ui.MOBILE else Ui.WIFI
         speedChart.topLabel = { "En hızlı saat ortalaması: ${Fmt.speed(it, bits)}" }
         speedChart.data = List(24) { Triple("%02d".format(it), avg[it], 0L) }
         speedChart.tooltip = { i -> if (avg[i] > 0) "%02d:00 civarı\nort. ${Fmt.speed(avg[i], bits)}".format(i) else "%02d:00\nölçüm yok".format(i) }

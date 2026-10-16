@@ -161,7 +161,7 @@ class OnboardingActivity : Activity() {
                 this,
                 if (granted) "✓ İzin verildi" else if (step.optional) "İsteğe bağlı" else "Gerekli",
                 14f, bold = true, topDp = 18,
-                color = if (granted) 0xFF2E7D32.toInt() else Ui.secondary(this)
+                color = if (granted) 0xFF4ADE80.toInt() else Ui.secondary(this)
             ).apply { gravity = Gravity.CENTER })
         }
 
