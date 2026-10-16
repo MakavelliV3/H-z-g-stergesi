@@ -293,8 +293,8 @@ class SmokeTest {
     fun a15_v32Features() {
         val p = Prefs.get(ctx)
         // Her tema, her etkinlikte açılmalı (hep karanlık açık ve kapalı)
-        for (t in 0..3) for (dark in listOf(true, false)) {
-            p.edit().putInt(Prefs.THEME, t).putBoolean(Prefs.FORCE_DARK, dark).commit()
+        for (t in 0..4) {
+            p.edit().putInt(Prefs.ACCENT_CHOICE, t).commit()
             Ui.init(ctx)
             ActivityScenario.launch(MainActivity::class.java).use { sc ->
                 for (tab in 0..4) {
@@ -305,8 +305,12 @@ class SmokeTest {
             ActivityScenario.launch<SettingsActivity>(Intent(ctx, SettingsActivity::class.java)
                 .putExtra(SettingsActivity.EXTRA_CATEGORY, SettingsActivity.CAT_LOOK)).use { pause(500) }
         }
-        p.edit().putInt(Prefs.THEME, 0).commit()
+        p.edit().putInt(Prefs.ACCENT_CHOICE, 0).commit()
         Ui.init(ctx)
+        // Eski sürümden geçiş: tema 1 (AMOLED) → turkuaz
+        p.edit().remove(Prefs.ACCENT_CHOICE).putInt(Prefs.THEME, 1).commit()
+        assertTrue(Themes.current(ctx) == Themes.TURQUOISE)
+        p.edit().putInt(Prefs.ACCENT_CHOICE, 0).commit()
         assertTrue(Icons.glyph("📦") != null && Icons.typeface(ctx) != null)
 
         // Paket: eşitleme, ek paket

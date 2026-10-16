@@ -215,7 +215,7 @@ class AnalysisScreen(a: MainActivity) : Screen(a) {
         }
         val line = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
         line.addView(Ui.text(a, title, 15f), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        line.addView(Ui.text(a, value, 17f, bold = true, color = Ui.accentText(a)))
+        line.addView(Ui.mono(Ui.text(a, value, 17f, color = Ui.accentText(a))))
         row.addView(line)
         row.addView(Ui.hint(a, sub))
         box.addView(row)

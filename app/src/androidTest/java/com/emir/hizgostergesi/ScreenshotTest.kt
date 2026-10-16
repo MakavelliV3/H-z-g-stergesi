@@ -173,9 +173,9 @@ class ScreenshotTest {
         }
         shell("cmd uimode night no")
 
-        // Hazır temalar (telefon açık temadayken "hep karanlık" ile)
-        for (t in 1..3) {
-            Prefs.get(ctx).edit().putInt(Prefs.THEME, t).putBoolean(Prefs.FORCE_DARK, true).commit()
+        // Vurgu renkleri
+        for (t in 1..4) {
+            Prefs.get(ctx).edit().putInt(Prefs.ACCENT_CHOICE, t).commit()
             Ui.init(ctx)
             ActivityScenario.launch(MainActivity::class.java).use { sc ->
                 fakeLive()
@@ -196,11 +196,7 @@ class ScreenshotTest {
                 ActivityScenario.launch<SettingsActivity>(plan).use { shot("11_tema1_paket") }
             }
         }
-        // Açık hâl: tema seçili, hep karanlık kapalı
-        Prefs.get(ctx).edit().putInt(Prefs.THEME, 2).putBoolean(Prefs.FORCE_DARK, false).commit()
-        Ui.init(ctx)
-        ActivityScenario.launch(MainActivity::class.java).use { fakeLive(); pause(1800); shot("11_tema2_acik") }
-        Prefs.get(ctx).edit().putInt(Prefs.THEME, 0).commit()
+        Prefs.get(ctx).edit().putInt(Prefs.ACCENT_CHOICE, 0).commit()
         Ui.init(ctx)
 
         // Bildirim paneli ve durum çubuğu

@@ -336,7 +336,7 @@ class AppsScreen(a: MainActivity) : Screen(a) {
             gravity = Gravity.END
         }
         val shown = if (sort == 2) u.background else value(u)
-        right.addView(Ui.text(a, Fmt.bytes(shown), 15f, bold = true, color = Ui.accentText(a)).apply {
+        right.addView(Ui.mono(Ui.text(a, Fmt.bytes(shown), 15f, color = Ui.accentText(a))).apply {
             gravity = Gravity.END
             setPadding(0, 0, 0, dp(2))
         })

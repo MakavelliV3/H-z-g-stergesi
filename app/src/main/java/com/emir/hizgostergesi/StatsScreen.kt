@@ -40,7 +40,7 @@ class StatsScreen(a: MainActivity) : Screen(a) {
         })
 
         root.addView(Ui.card(a).apply {
-            totalValue = Ui.text(a, "", 30f, bold = true)
+            totalValue = Ui.mono(Ui.text(a, "", 32f))
             totalSub = Ui.hint(a, "")
             totalSplit = SplitBar(a).apply {
                 colorA = mobileColor

@@ -147,7 +147,7 @@ class AppDetailActivity : Activity() {
         names.addView(Ui.hint(this, a.category))
         row.addView(names)
         head.addView(row)
-        head.addView(Ui.text(this, "Son 30 günde ${Fmt.bytes(a.total)}", 17f, bold = true, topDp = 12, color = Ui.accentText(this)))
+        head.addView(Ui.mono(Ui.text(this, "Son 30 günde ${Fmt.bytes(a.total)}", 16f, topDp = 12, color = Ui.accentText(this))))
         if (a.heavyUploader) {
             head.addView(Ui.text(this, "⬆ Bu uygulama aldığından fazla veri gönderiyor (${Fmt.bytes(a.tx)} gönderdi, ${Fmt.bytes(a.rx)} aldı).",
                 14f, color = 0xFFFF6B6B.toInt()))

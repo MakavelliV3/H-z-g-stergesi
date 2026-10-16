@@ -406,6 +406,7 @@ class BarChart(c: Context) : View(c) {
         val r = minOf(barW / 2, 6 * d)
 
         paint.textSize = 10 * d
+        paint.typeface = Mono.regular(context)
         paint.style = Paint.Style.FILL
         data.forEachIndexed { i, (label, m, w) ->
             val cx = slot * i + slot / 2
@@ -563,6 +564,7 @@ class HeatMap(c: Context) : View(c) {
         val max = grid.maxOf { r -> r.maxOrNull() ?: 0L }.coerceAtLeast(1L)
 
         paint.textSize = 10 * d
+        paint.typeface = Mono.regular(context)
         paint.textAlign = Paint.Align.LEFT
         for (r in 0 until 7) {
             paint.color = labelColor
