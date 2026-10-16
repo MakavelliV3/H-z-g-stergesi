@@ -519,7 +519,7 @@ class SpeedService : Service() {
             fill(it, intArrayOf(R.id.l1, R.id.l2, R.id.l3, R.id.l4, R.id.l5), lines)
         }
         // Mini hız grafiği (saydamlık maskesi: az bellek, rengi sonradan verilir)
-        val graphColor = textColor ?: Ui.ACCENT
+        val graphColor = textColor ?: Ui.ACCENT_2
         if (prefs.getBoolean(Prefs.N_GRAPH, true)) {
             val samples = recent()
             small.setViewVisibility(R.id.n_graph, View.VISIBLE)

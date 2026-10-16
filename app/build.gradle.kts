@@ -11,8 +11,8 @@ android {
         applicationId = "com.emir.hizgostergesi"
         minSdk = 29
         targetSdk = 35
-        versionCode = 20
-        versionName = "4.0"
+        versionCode = 21
+        versionName = "4.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

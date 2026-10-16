@@ -127,7 +127,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             text = "0"
             textSize = 60f
             setTextColor(Ui.primary(a))
-            letterSpacing = -0.04f
+            letterSpacing = -0.08f
             includeFontPadding = false
         })
         bigUnit = Ui.mono(TextView(a).apply {
